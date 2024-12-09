@@ -1,11 +1,37 @@
 // import { TileDef } from "./TileDef";
 
-// Utility functions
+interface RandomLib {
+  random(): number;
+  setSeed(seed: number|string): void;
+}
 
-// Assume the array is not empty
-let pick: <T>(array: T[]) => T = (array) => {
-  return array[Math.floor(Math.random() * array.length)]
-};
+class DefaultRandom implements RandomLib {
+  random(): number {
+    return Math.random();
+  }
+
+  setSeed(seed: number): void {
+    // Do nothing
+  }
+}
+
+const seedrandom = require('seedrandom');
+
+class SeedRandom implements RandomLib {
+  private rng: any;
+
+  constructor(seed?: string|number) {
+    this.rng = seed === undefined ? seedrandom() : seedrandom(seed);
+  }
+
+  random(): number {
+    return this.rng();
+  }
+
+  setSeed(seed: string): void {
+    this.rng = seedrandom(seed);
+  }
+}
 
 // export type TileDef = {
 type TileDef = {
@@ -139,6 +165,7 @@ class SquareGrid implements Grid<[number, number]> {
 type WFCOptions = {
   maxRetries?: number;
   backtrackStep?: number;
+  random?: RandomLib;
 };
 
 // export class WFC {
@@ -147,6 +174,7 @@ class WFC {
   private options: Required<WFCOptions>;
   private retries: number;
   private grid: Grid;
+  private rng: RandomLib;
 
   constructor(tileDefs: TileDef[], grid: Grid, options: WFCOptions = {}) {
     this.tileDefs = tileDefs;
@@ -155,7 +183,9 @@ class WFC {
     this.options = {
       maxRetries: options.maxRetries ?? 100,
       backtrackStep: options.backtrackStep ?? 1,
+      random: options.random ?? new DefaultRandom(),
     };
+    this.rng = this.options.random;
     this.retries = 0;
   }
 
@@ -170,6 +200,10 @@ class WFC {
         coords: [x, y],
       });
     }
+  }
+  // Utility function: pick
+  pick<T>(array: T[]): T {
+    return array[Math.floor(this.rng.random() * array.length)];
   }
 
   get completed(): boolean {
@@ -194,7 +228,7 @@ class WFC {
     let lowestEntropy:Cell = this.getLowestEntropyTile(uncollapsed);
     console.log('Lowest entropy:', lowestEntropy);
     // let collapseValue:TileDef = pick(lowestEntropy.choices.filter(choice => !lowestEntropy.forbidden.includes(choice)));
-    let collapseValue:TileDef = pick(lowestEntropy.choices);
+    let collapseValue:TileDef = this.pick(lowestEntropy.choices);
     lowestEntropy.collapsed = true;
     lowestEntropy.choices = [collapseValue];
     added.push(lowestEntropy);
@@ -219,7 +253,7 @@ class WFC {
         candidates.push(cell);
       }
     }
-    return pick(candidates);
+    return this.pick(candidates);
   }
 
   // TODO: This implementation is naive, in that it iterates over all the cells and checks
@@ -308,8 +342,15 @@ let tiledefs: TileDef[] = [
   },
 ]
 
-let grid = new SquareGrid(10, 10);
-let wfc = new WFC(tiledefs, grid);
+let grid = new SquareGrid(6, 6);
+// let r = Math.floor(Math.random() * 10000);
+// let r = process.argv[2] || 100;
+let r = "63";
+console.log('Initial seed:', r);
+
+let random = new SeedRandom(r);
+
+let wfc = new WFC(tiledefs, grid, { random });
 
 let debugWFC = (clean = false) => {
   // Iterate over all the tiles in the grid, and draw them
