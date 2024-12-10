@@ -168,6 +168,23 @@ type WFCOptions = {
   random?: RandomLib;
 };
 
+type DeltaChange<Coords> ={
+  collapsedCell: Cell;
+  pickedValue: TileDef;
+  discardedValues: Array<{ coords: Coords, tiles: TileDef[], collapsed: boolean }>;
+  backtrack?: boolean;
+}
+
+let debugDelta = (delta: DeltaChange<[number, number]>) => {
+  console.log('Delta:')
+  console.log('Collapsed cell:', delta.collapsedCell.coords);
+  console.log('Picked value:', delta.pickedValue);
+  console.log('Discarded values:');
+  for (let { coords, tiles, collapsed } of delta.discardedValues) {
+    console.log(coords, ' => ', tiles.map(t => t.name))
+  }
+}
+
 // export class WFC {
 class WFC {
   private tileDefs: TileDef[];
@@ -175,6 +192,7 @@ class WFC {
   private retries: number;
   private grid: Grid;
   private rng: RandomLib;
+  private deltaStack: DeltaChange<[number, number]>[];
 
   constructor(tileDefs: TileDef[], grid: Grid, options: WFCOptions = {}) {
     this.tileDefs = tileDefs;
@@ -187,6 +205,7 @@ class WFC {
     };
     this.rng = this.options.random;
     this.retries = 0;
+    this.deltaStack = [];
   }
 
   initializeGrid() {
@@ -217,27 +236,67 @@ class WFC {
     return true;
   }
 
-  generate(): { added: Cell[], removed: Cell[] } {
+  generate(): { collapsed: Cell[], reverted: Cell[] } {
+    console.log('=======================================')
     let cells = this.grid.getCells();
     let uncollapsed = cells.filter(cell => !cell.collapsed)
-    let added: Cell[] = [];
-    let removed: Cell[] = [];
     if (uncollapsed.length === 0) {
-      return { added: [], removed: [] }; // Finished
+      return { collapsed: [], reverted: [] };
     }
     let lowestEntropy:Cell = this.getLowestEntropyTile(uncollapsed);
-    console.log('Lowest entropy:', lowestEntropy);
+    console.log('Lowest entropy:', lowestEntropy.coords);
     // let collapseValue:TileDef = pick(lowestEntropy.choices.filter(choice => !lowestEntropy.forbidden.includes(choice)));
     let collapseValue:TileDef = this.pick(lowestEntropy.choices);
-    lowestEntropy.collapsed = true;
-    lowestEntropy.choices = [collapseValue];
-    added.push(lowestEntropy);
 
-    console.log('Collapsing to:', collapseValue, 'at', lowestEntropy.coords);
+    // Collapse the tile
+    let delta: DeltaChange<[number, number]> = this.collapse(lowestEntropy, collapseValue);
+    if (delta.backtrack) {
+      console.log('Some backtracking is needed');
+      // Apply backtracking
+      return { collapsed: [], reverted: [] };
+    } else {
+      // Save the delta in the queue and return the changed cells
+      this.deltaStack.push(delta);
+      let collapsed = delta.discardedValues.filter(d => d.collapsed).map(d => this.grid.get(d.coords)).filter(c => c !== null) as Cell[];
+      return { collapsed, reverted: [] };
+    }
+    // return { collapsed, reverted };
 
-    let changedValues = this.propagate(lowestEntropy, collapseValue);
-    return { added, removed };
+    // lowestEntropy.collapsed = true;
+    // lowestEntropy.choices = [collapseValue];
+    // added.push(lowestEntropy);
+
+
   }
+
+  collapse(cell: Cell, tile: TileDef) : DeltaChange<[number, number]> {
+    console.log('Collapsing to:', tile, 'at', cell.coords);
+    let previousChoices = [...cell.choices];
+    let removed = previousChoices.filter(c => c !== tile);
+    cell.collapsed = true;
+    cell.choices = [tile];
+
+    let delta: DeltaChange<[number, number]> = this.propagate(cell, tile);
+
+    // Add the cell to the delta
+    delta.collapsedCell = cell;
+    delta.pickedValue = tile;
+    delta.discardedValues.push({ coords: cell.coords, tiles: removed, collapsed: cell.collapsed });
+
+    // From the cells that changed, collapse those with only one possible tile definition, or mark backtracking if any cell has no possible tile definitions
+    for (let { coords, tiles, collapsed } of delta.discardedValues) {
+      let cell = this.grid.get(coords);
+      if (cell && cell.choices.length === 0) {
+        delta.backtrack = true;
+      }
+      if (cell && cell.choices.length === 1 && !cell.collapsed) {
+        cell.collapsed = true;
+      }
+    }
+    debugDelta(delta);
+    return delta;
+  }
+
 
   // Return the tile with the least amount of possible tile definitions.
   // In case of a tie, return a random one.
@@ -258,12 +317,18 @@ class WFC {
 
   // TODO: This implementation is naive, in that it iterates over all the cells and checks
   // only once, instead of propagating from the changed values until no more changes are made.
-  propagate(cell: Cell, collapseValue: TileDef): Cell[] {
+  propagate(cell: Cell, collapseValue: TileDef): DeltaChange<[number, number]> {
     let iterator = this.grid.iterate();
+    let changedValues: DeltaChange<[number, number]> = {
+      collapsedCell: cell,
+      pickedValue: collapseValue,
+      discardedValues: []
+    };
     for (let [cell, [x, y]] of iterator) {
       if (cell.collapsed) {
         continue;
       }
+      let currentOptions = [...cell.choices];
       let neighbors = this.grid.getNeighbors([x, y]);
       for (let i = 0; i < neighbors.length; i++) {
         let neighbor = neighbors[i];
@@ -272,18 +337,18 @@ class WFC {
           cell.choices = validAdjacencies;
         }
       }
-      if (cell.choices.length === 1) {
-        // Collapse the cell
-        cell.collapsed = true;
-        console.log('Collapsed cell:', cell);
-      }
-      if (cell.choices.length === 0) {
-        // No possible solution, backtrack
-        console.log('No possible solution, backtracking');
-        return [];
+      console.log('Comparing:', currentOptions.map(c => c.name).join(','), 'vs', cell.choices.map(c => c.name).join(','), 'at', cell.coords);
+      // Check if the cell has changed
+      if (currentOptions.length !== cell.choices.length) {
+        // changedValues.discardedValues.push({ coords: [x, y], tiles: currentOptions, collapsed: cell.collapsed });
+        // Only push the removed values if they are different from the collapse value
+        // let removed = currentOptions.filter(c => c !== collapseValue);
+        let removed = currentOptions.filter(c => !cell.choices.includes(c));
+        console.log('Removed:', removed.map(c => c.name), 'from', cell.coords);
+        changedValues.discardedValues.push({ coords: [x, y], tiles: removed, collapsed: cell.collapsed });
       }
     }
-    return [];
+    return changedValues;
   }
 
   // TODO: Implementation is quadratic, can be optimized by precalculating the total of possible adjacencies
@@ -306,37 +371,44 @@ class WFC {
 
 let tiledefs: TileDef[] = [
   {
-    name: "empty",
+    // name: "empty",
+    name: ".",
     adjacencies: ["E", "E", "E", "E"],
     draw: () => { process.stdout.write("."); }
   },
   {
-    name: "horizontal wall",
+    // name: "horizontal wall",
+    name: "─",
     adjacencies: ["E", "W", "E", "W"],
     draw: () => { process.stdout.write("─"); }
   },
   {
-    name: "vertical wall",
+    // name: "vertical wall",
+    name: "│",
     adjacencies: ["W", "E", "W", "E"],
     draw: () => { process.stdout.write("│"); }
   },
   {
-    name: "topleft corner",
+    // name: "topleft corner",
+    name: "┌",
     adjacencies: ["E", "W", "W", "E"],
     draw: () => { process.stdout.write("┌"); }
   },
   {
-    name: "topright corner",
+    // name: "topright corner",
+    name: "┐",
     adjacencies: ["E", "E", "W", "W"],
     draw: () => { process.stdout.write("┐"); }
   },
   {
-    name: "bottomleft corner",
+    // name: "bottomleft corner",
+    name: "└",
     adjacencies: ["W", "W", "E", "E"],
     draw: () => { process.stdout.write("└"); }
   },
   {
-    name: "bottomright corner",
+    // name: "bottomright corner",
+    name: "┘",
     adjacencies: ["W", "E", "E", "W"],
     draw: () => { process.stdout.write("┘"); }
   },
@@ -381,7 +453,7 @@ while (!wfc.completed && maxTries > 0) {
   maxTries--;
   debugWFC();
   console.log('\n')
-  let { added, removed } = wfc.generate();
+  let { collapsed, reverted } = wfc.generate();
 }
 
 debugWFC(true);
