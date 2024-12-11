@@ -178,7 +178,7 @@ type DeltaChange<Coords> ={
 let debugDelta = (delta: DeltaChange<[number, number]>) => {
   console.log('Delta:')
   console.log('Collapsed cell:', delta.collapsedCell.coords);
-  console.log('Picked value:', delta.pickedValue);
+  console.log('Picked value:', delta.pickedValue.name);
   console.log('Discarded values:');
   for (let { coords, tiles, collapsed } of delta.discardedValues) {
     console.log(coords, ' => ', tiles.map(t => t.name))
@@ -252,8 +252,16 @@ class WFC {
     let delta: DeltaChange<[number, number]> = this.collapse(lowestEntropy, collapseValue);
     if (delta.backtrack) {
       console.log('Some backtracking is needed');
-      // Apply backtracking
-      return { collapsed: [], reverted: [] };
+      console.log('---')
+      debugWFC();
+      console.log('\n---')
+      debugDelta(delta);
+
+      this.deltaStack.push(delta);
+      let backtracked = this.backtrack();
+      console.log('Backtracked:', backtracked.map(c => c.coords));
+      // Debug the whole grid
+      return { collapsed: [], reverted: backtracked };
     } else {
       // Save the delta in the queue and return the changed cells
       this.deltaStack.push(delta);
@@ -265,12 +273,20 @@ class WFC {
     // lowestEntropy.collapsed = true;
     // lowestEntropy.choices = [collapseValue];
     // added.push(lowestEntropy);
+  }
 
-
+  backtrack(): Cell[] {
+    console.log('Backtracking');
+    let delta = this.deltaStack.pop();
+    if (delta) {
+      return this.undoChange(delta);
+    } else {
+      throw 'Cannot backtrack'
+    }
   }
 
   collapse(cell: Cell, tile: TileDef) : DeltaChange<[number, number]> {
-    console.log('Collapsing to:', tile, 'at', cell.coords);
+    console.log('Collapsing to:', tile.name, 'at', cell.coords);
     let previousChoices = [...cell.choices];
     let removed = previousChoices.filter(c => c !== tile);
     cell.collapsed = true;
@@ -337,14 +353,14 @@ class WFC {
           cell.choices = validAdjacencies;
         }
       }
-      console.log('Comparing:', currentOptions.map(c => c.name).join(','), 'vs', cell.choices.map(c => c.name).join(','), 'at', cell.coords);
+      // console.log('Comparing:', currentOptions.map(c => c.name).join(','), 'vs', cell.choices.map(c => c.name).join(','), 'at', cell.coords);
       // Check if the cell has changed
       if (currentOptions.length !== cell.choices.length) {
         // changedValues.discardedValues.push({ coords: [x, y], tiles: currentOptions, collapsed: cell.collapsed });
         // Only push the removed values if they are different from the collapse value
         // let removed = currentOptions.filter(c => c !== collapseValue);
         let removed = currentOptions.filter(c => !cell.choices.includes(c));
-        console.log('Removed:', removed.map(c => c.name), 'from', cell.coords);
+        console.log('Removed:', removed.map(c => c.name), 'from', cell.coords, 'remaining:', cell.choices.map(c => c.name));
         changedValues.discardedValues.push({ coords: [x, y], tiles: removed, collapsed: cell.collapsed });
       }
     }
@@ -365,6 +381,25 @@ class WFC {
       }
     }
     return valid;
+  }
+
+  undoChange(delta: DeltaChange<[number, number]>): Cell[] {
+    let revertedCells = [];
+    let { collapsedCell, pickedValue, discardedValues } = delta;
+    collapsedCell.collapsed = false;
+    // collapsedCell.choices = [...discardedValues[0].tiles];
+    collapsedCell.forbidden.push(pickedValue);
+    for (let { coords, tiles, collapsed } of discardedValues) {
+      let cell = this.grid.get(coords);
+      if (cell) {
+        // Add back the removed tiles
+        console.log('Adding back:', tiles.map(t => t.name), 'to', cell.coords, cell.choices.map(t => t.name));
+        cell.choices = [...cell.choices, ...tiles];
+        cell.collapsed = cell.choices.length === 1;
+        revertedCells.push(cell);
+      }
+    }
+    return revertedCells;
   }
 
 }
@@ -392,8 +427,7 @@ let tiledefs: TileDef[] = [
     // name: "topleft corner",
     name: "┌",
     adjacencies: ["E", "W", "W", "E"],
-    draw: () => { process.stdout.write("┌"); }
-  },
+    draw: () => { process.stdout.write("┌"); } },
   {
     // name: "topright corner",
     name: "┐",
@@ -414,15 +448,22 @@ let tiledefs: TileDef[] = [
   },
 ]
 
-let grid = new SquareGrid(6, 6);
-// let r = Math.floor(Math.random() * 10000);
+let grid = new SquareGrid(40, 40);
+let r = Math.floor(Math.random() * 10000);
 // let r = process.argv[2] || 100;
-let r = "63";
+// let r = "63";
 console.log('Initial seed:', r);
 
 let random = new SeedRandom(r);
 
 let wfc = new WFC(tiledefs, grid, { random });
+
+let debugQueue = (queue: DeltaChange<[number, number]>[]) => {
+  console.log('Queue:')
+  for (let delta of queue) {
+    debugDelta(delta);
+  }
+}
 
 let debugWFC = (clean = false) => {
   // Iterate over all the tiles in the grid, and draw them
@@ -434,21 +475,18 @@ let debugWFC = (clean = false) => {
       lastRow = y;
     }
     if (!clean) {
-      process.stdout.write("[");
-      if (cell.collapsed) {
-        process.stdout.write("*");
-      }
+      process.stdout.write(cell.collapsed ? '(' : '[');
     }
     for (let choice of cell.choices) {
       choice.draw();
     }
     if (!clean) {
-      process.stdout.write("]");
+      process.stdout.write(cell.collapsed ? ')' : ']');
     }
   }
 }
 
-let maxTries = 100;
+let maxTries = 10000;
 while (!wfc.completed && maxTries > 0) {
   maxTries--;
   debugWFC();
@@ -458,3 +496,4 @@ while (!wfc.completed && maxTries > 0) {
 
 debugWFC(true);
 console.log('\n')
+console.log('Seed:', r);
