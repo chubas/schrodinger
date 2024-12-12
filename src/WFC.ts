@@ -1,192 +1,22 @@
-// import { TileDef } from "./TileDef";
+import { RandomLib, DefaultRandom } from "./RandomLib.js";
+import { TileDef } from "./TileDef.js";
+import { Grid, Cell } from "./Grid.js";
+import { debugDelta } from "./util.js";
 
-interface RandomLib {
-  random(): number;
-  setSeed(seed: number|string): void;
-}
-
-class DefaultRandom implements RandomLib {
-  random(): number {
-    return Math.random();
-  }
-
-  setSeed(seed: number): void {
-    // Do nothing
-  }
-}
-
-const seedrandom = require('seedrandom');
-
-class SeedRandom implements RandomLib {
-  private rng: any;
-
-  constructor(seed?: string|number) {
-    this.rng = seed === undefined ? seedrandom() : seedrandom(seed);
-  }
-
-  random(): number {
-    return this.rng();
-  }
-
-  setSeed(seed: string): void {
-    this.rng = seedrandom(seed);
-  }
-}
-
-// export type TileDef = {
-type TileDef = {
-  /**
-   * List of adjacency definitions.
-   * The adjacency is an arbitrary string that must match the adjacency of another tile.
-   * It can accept multiple adjacencies as strings joined by |
-   * The adjacencies are ordered: top, right, bottom, left
-   * Example: ["A", "B", "A|B", "C"]
-  */
-  adjacencies: string[];
-  name: string;
-  rotation?: number;
-  reflection?: number;
-  weight?: number;
-  draw: () => void;
-};
-
-// export class TileDefFactory {
-class TileDefFactory {
-  /**
-   * Creates a TileDef with the provided properties. Adds a noop `draw` method if not specified.
-   * @param tile - Partial tile definition
-   * @returns Complete TileDef object
-   */
-  static defineTile(tile: Partial<TileDef>): TileDef {
-    return {
-      name: tile.name ?? "",
-      adjacencies: tile.adjacencies ?? [],
-      rotation: tile.rotation ?? 0,
-      reflection: tile.reflection ?? 0,
-      draw: tile.draw ?? (() => {}),
-    };
-  }
-
-  static extractAdjacencies = (adjacency: string): string[][] => {
-    let result: string[][] = [];
-    let adjacencyDefs = adjacency.split("|");
-    for (let adjacencyDef of adjacencyDefs) {
-      // Adjacencies can be a single character, or a sequence of characters between parentheses (except `(`, `)`, and `|`)
-      let adjacencyDefParts = adjacencyDef.match(/\(([^)]+)\)|./g);
-      if (adjacencyDefParts) {
-        let adjacencyDefPartsCleaned = adjacencyDefParts.map(part => part.replace(/[()]/g, ""));
-        result.push(adjacencyDefPartsCleaned);
-      }
-    }
-    return result;
-  }
-}
-
-type Cell = {
-  choices: TileDef[];
-  collapsed: boolean;
-  forbidden: TileDef[];
-  coords: any; // TODO: How to specify the variable type?
-}
-
-interface Grid<Coords = any> {
-  // Define a method for iterating, a getter and setter with variable attributes (ex: x, y), and a method to get neighbors
-
-  iterate(): IterableIterator<[Cell, Coords]>;
-  get(coords: Coords): Cell | null;
-  set(coords: Coords, cell: Cell): void;
-  getNeighbors(coords: Coords): (Cell|null)[];
-  getCells(): Cell[];
-  // Adjacency map is an array, where for each cell in the TileDef grid, its index indicates the index of the neighbor it matches
-  adjacencyMap: number[];
-}
-
-class SquareGrid implements Grid<[number, number]> {
-  private cells: Cell[];
-  private width: number;
-  private height: number;
-
-  constructor(width: number, height: number) {
-    // Initialize the grid with empty cells
-    this.width = width;
-    this.height = height;
-    this.cells = new Array(width * height).fill({ choices: [], collapsed: false, forbidden: [] });
-  }
-
-  *iterate(): IterableIterator<[Cell, [number, number]]> {
-    for (let y = 0; y < this.height; y++) {
-      for (let x = 0; x < this.width; x++) {
-        let n = this.width * y + x;
-        // console.log(n, x, y, this.cells[n]);
-        yield [this.cells[n], [x, y]];
-      }
-    }
-  }
-
-  getNeighbors(coords: [number, number]): (Cell|null)[] {
-    let deltas = [[0, -1], [1, 0], [0, 1], [-1, 0]];
-    let [x, y] = coords;
-    let neighbors = [];
-    for (let [dx, dy] of deltas) {
-      let neighbor = this.get([x + dx, y + dy]);
-      if (neighbor) {
-        neighbors.push(neighbor);
-      } else {
-        neighbors.push(null);
-      }
-    }
-    return neighbors;
-  }
-
-  get([x, y]:[number, number]): Cell | null {
-    let n = this.width * y + x;
-    if (n < 0 || n >= this.cells.length) {
-      return null;
-    }
-    return this.cells[n];
-  }
-
-  set([x, y]:[number, number], cell: Cell) {
-    let n = this.width * y + x;
-    if (n < 0 || n >= this.cells.length) {
-      // console.log('Out of bounds', x, y, n, this.cells.length);
-      return;
-    }
-    this.cells[n] = cell;
-  }
-
-  getCells(): Cell[] {
-    return this.cells;
-  }
-
-  adjacencyMap: number[] = [2, 3, 0, 1]; // Bottom, Left, Top, Right
-}
-
-type WFCOptions = {
+export type WFCOptions = {
   maxRetries?: number;
   backtrackStep?: number;
   random?: RandomLib;
 };
 
-type DeltaChange<Coords> ={
+export type DeltaChange<Coords> ={
   collapsedCell: Cell;
   pickedValue: TileDef;
   discardedValues: Array<{ coords: Coords, tiles: TileDef[], collapsed: boolean }>;
   backtrack?: boolean;
 }
 
-let debugDelta = (delta: DeltaChange<[number, number]>) => {
-  console.log('Delta:')
-  console.log('Collapsed cell:', delta.collapsedCell.coords);
-  console.log('Picked value:', delta.pickedValue.name);
-  console.log('Discarded values:');
-  for (let { coords, tiles, collapsed } of delta.discardedValues) {
-    console.log(coords, ' => ', tiles.map(t => t.name))
-  }
-}
-
-// export class WFC {
-class WFC {
+export class WFC {
   private tileDefs: TileDef[];
   private options: Required<WFCOptions>;
   private retries: number;
@@ -237,29 +67,30 @@ class WFC {
   }
 
   generate(): { collapsed: Cell[], reverted: Cell[] } {
-    console.log('=======================================')
+    // console.log('=======================================')
     let cells = this.grid.getCells();
     let uncollapsed = cells.filter(cell => !cell.collapsed)
     if (uncollapsed.length === 0) {
       return { collapsed: [], reverted: [] };
     }
     let lowestEntropy:Cell = this.getLowestEntropyTile(uncollapsed);
-    console.log('Lowest entropy:', lowestEntropy.coords);
+    // console.log('Lowest entropy:', lowestEntropy.coords);
     // let collapseValue:TileDef = pick(lowestEntropy.choices.filter(choice => !lowestEntropy.forbidden.includes(choice)));
     let collapseValue:TileDef = this.pick(lowestEntropy.choices);
 
     // Collapse the tile
     let delta: DeltaChange<[number, number]> = this.collapse(lowestEntropy, collapseValue);
     if (delta.backtrack) {
-      console.log('Some backtracking is needed');
-      console.log('---')
-      debugWFC();
-      console.log('\n---')
-      debugDelta(delta);
+      // console.log('Some backtracking is needed');
+      // console.log('---')
+      // debugWFC();
+      // console.log('\n---')
+      // debugDelta(delta);
+      throw 'Backtracking is needed';
 
       this.deltaStack.push(delta);
       let backtracked = this.backtrack();
-      console.log('Backtracked:', backtracked.map(c => c.coords));
+      // console.log('Backtracked:', backtracked.map(c => c.coords));
       // Debug the whole grid
       return { collapsed: [], reverted: backtracked };
     } else {
@@ -286,7 +117,7 @@ class WFC {
   }
 
   collapse(cell: Cell, tile: TileDef) : DeltaChange<[number, number]> {
-    console.log('Collapsing to:', tile.name, 'at', cell.coords);
+    // console.log('Collapsing to:', tile.name, 'at', cell.coords);
     let previousChoices = [...cell.choices];
     let removed = previousChoices.filter(c => c !== tile);
     cell.collapsed = true;
@@ -309,7 +140,6 @@ class WFC {
         cell.collapsed = true;
       }
     }
-    debugDelta(delta);
     return delta;
   }
 
@@ -360,7 +190,7 @@ class WFC {
         // Only push the removed values if they are different from the collapse value
         // let removed = currentOptions.filter(c => c !== collapseValue);
         let removed = currentOptions.filter(c => !cell.choices.includes(c));
-        console.log('Removed:', removed.map(c => c.name), 'from', cell.coords, 'remaining:', cell.choices.map(c => c.name));
+        // console.log('Removed:', removed.map(c => c.name), 'from', cell.coords, 'remaining:', cell.choices.map(c => c.name));
         changedValues.discardedValues.push({ coords: [x, y], tiles: removed, collapsed: cell.collapsed });
       }
     }
@@ -393,7 +223,7 @@ class WFC {
       let cell = this.grid.get(coords);
       if (cell) {
         // Add back the removed tiles
-        console.log('Adding back:', tiles.map(t => t.name), 'to', cell.coords, cell.choices.map(t => t.name));
+        // console.log('Adding back:', tiles.map(t => t.name), 'to', cell.coords, cell.choices.map(t => t.name));
         cell.choices = [...cell.choices, ...tiles];
         cell.collapsed = cell.choices.length === 1;
         revertedCells.push(cell);
@@ -403,97 +233,3 @@ class WFC {
   }
 
 }
-
-let tiledefs: TileDef[] = [
-  {
-    // name: "empty",
-    name: ".",
-    adjacencies: ["E", "E", "E", "E"],
-    draw: () => { process.stdout.write("."); }
-  },
-  {
-    // name: "horizontal wall",
-    name: "─",
-    adjacencies: ["E", "W", "E", "W"],
-    draw: () => { process.stdout.write("─"); }
-  },
-  {
-    // name: "vertical wall",
-    name: "│",
-    adjacencies: ["W", "E", "W", "E"],
-    draw: () => { process.stdout.write("│"); }
-  },
-  {
-    // name: "topleft corner",
-    name: "┌",
-    adjacencies: ["E", "W", "W", "E"],
-    draw: () => { process.stdout.write("┌"); } },
-  {
-    // name: "topright corner",
-    name: "┐",
-    adjacencies: ["E", "E", "W", "W"],
-    draw: () => { process.stdout.write("┐"); }
-  },
-  {
-    // name: "bottomleft corner",
-    name: "└",
-    adjacencies: ["W", "W", "E", "E"],
-    draw: () => { process.stdout.write("└"); }
-  },
-  {
-    // name: "bottomright corner",
-    name: "┘",
-    adjacencies: ["W", "E", "E", "W"],
-    draw: () => { process.stdout.write("┘"); }
-  },
-]
-
-let grid = new SquareGrid(40, 40);
-let r = Math.floor(Math.random() * 10000);
-// let r = process.argv[2] || 100;
-// let r = "63";
-console.log('Initial seed:', r);
-
-let random = new SeedRandom(r);
-
-let wfc = new WFC(tiledefs, grid, { random });
-
-let debugQueue = (queue: DeltaChange<[number, number]>[]) => {
-  console.log('Queue:')
-  for (let delta of queue) {
-    debugDelta(delta);
-  }
-}
-
-let debugWFC = (clean = false) => {
-  // Iterate over all the tiles in the grid, and draw them
-  let iterator = grid.iterate();
-  let lastRow = 0;
-  for (let [cell, [x, y]] of iterator) {
-    if (y > lastRow) {
-      process.stdout.write("\n");
-      lastRow = y;
-    }
-    if (!clean) {
-      process.stdout.write(cell.collapsed ? '(' : '[');
-    }
-    for (let choice of cell.choices) {
-      choice.draw();
-    }
-    if (!clean) {
-      process.stdout.write(cell.collapsed ? ')' : ']');
-    }
-  }
-}
-
-let maxTries = 10000;
-while (!wfc.completed && maxTries > 0) {
-  maxTries--;
-  debugWFC();
-  console.log('\n')
-  let { collapsed, reverted } = wfc.generate();
-}
-
-debugWFC(true);
-console.log('\n')
-console.log('Seed:', r);
