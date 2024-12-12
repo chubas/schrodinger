@@ -31,14 +31,14 @@ export class TileDefFactory {
   }
 
   static extractAdjacencies = (adjacency: string): string[][] => {
-    let result: string[][] = [];
-    let adjacencyDefs = adjacency.split("|");
-    for (let adjacencyDef of adjacencyDefs) {
+    const result: string[][] = [];
+    const adjacencyDefs = adjacency.split("|");
+    for (const adjacencyDef of adjacencyDefs) {
       // Adjacencies can be a single character, or a sequence of characters between parentheses (except `(`, `)`, and `|`)
-      let adjacencyDefParts = adjacencyDef.match(/\(([^)]+)\)|./g);
+      const adjacencyDefParts = adjacencyDef.match(/\(([^)]+)\)|./g);
       if (adjacencyDefParts) {
-        let adjacencyDefPartsCleaned = adjacencyDefParts.map((part) =>
-          part.replace(/[()]/g, "")
+        const adjacencyDefPartsCleaned = adjacencyDefParts.map((part) =>
+          part.replace(/[()]/g, ""),
         );
         result.push(adjacencyDefPartsCleaned);
       }

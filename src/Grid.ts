@@ -1,11 +1,11 @@
-import { TileDef } from './TileDef.js';
+import { TileDef } from "./TileDef.js";
 
 export type Cell = {
   choices: TileDef[];
   collapsed: boolean;
   forbidden: TileDef[];
   coords: any; // TODO: How to specify the variable type?
-}
+};
 
 export interface Grid<Coords = any> {
   // Define a method for iterating, a getter and setter with variable attributes (ex: x, y), and a method to get neighbors
@@ -13,7 +13,7 @@ export interface Grid<Coords = any> {
   iterate(): IterableIterator<[Cell, Coords]>;
   get(coords: Coords): Cell | null;
   set(coords: Coords, cell: Cell): void;
-  getNeighbors(coords: Coords): (Cell|null)[];
+  getNeighbors(coords: Coords): (Cell | null)[];
   getCells(): Cell[];
   // Adjacency map is an array, where for each cell in the TileDef grid, its index indicates the index of the neighbor it matches
   adjacencyMap: number[];
@@ -28,25 +28,34 @@ export class SquareGrid implements Grid<[number, number]> {
     // Initialize the grid with empty cells
     this.width = width;
     this.height = height;
-    this.cells = new Array(width * height).fill({ choices: [], collapsed: false, forbidden: [] });
+    this.cells = new Array(width * height).fill({
+      choices: [],
+      collapsed: false,
+      forbidden: [],
+    });
   }
 
   *iterate(): IterableIterator<[Cell, [number, number]]> {
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {
-        let n = this.width * y + x;
+        const n = this.width * y + x;
         // console.log(n, x, y, this.cells[n]);
         yield [this.cells[n], [x, y]];
       }
     }
   }
 
-  getNeighbors(coords: [number, number]): (Cell|null)[] {
-    let deltas = [[0, -1], [1, 0], [0, 1], [-1, 0]];
-    let [x, y] = coords;
-    let neighbors = [];
-    for (let [dx, dy] of deltas) {
-      let neighbor = this.get([x + dx, y + dy]);
+  getNeighbors(coords: [number, number]): (Cell | null)[] {
+    const deltas = [
+      [0, -1],
+      [1, 0],
+      [0, 1],
+      [-1, 0],
+    ];
+    const [x, y] = coords;
+    const neighbors = [];
+    for (const [dx, dy] of deltas) {
+      const neighbor = this.get([x + dx, y + dy]);
       if (neighbor) {
         neighbors.push(neighbor);
       } else {
@@ -56,16 +65,16 @@ export class SquareGrid implements Grid<[number, number]> {
     return neighbors;
   }
 
-  get([x, y]:[number, number]): Cell | null {
-    let n = this.width * y + x;
+  get([x, y]: [number, number]): Cell | null {
+    const n = this.width * y + x;
     if (n < 0 || n >= this.cells.length) {
       return null;
     }
     return this.cells[n];
   }
 
-  set([x, y]:[number, number], cell: Cell) {
-    let n = this.width * y + x;
+  set([x, y]: [number, number], cell: Cell) {
+    const n = this.width * y + x;
     if (n < 0 || n >= this.cells.length) {
       // console.log('Out of bounds', x, y, n, this.cells.length);
       return;

@@ -9,12 +9,16 @@ export type WFCOptions = {
   random?: RandomLib;
 };
 
-export type DeltaChange<Coords> ={
+export type DeltaChange<Coords> = {
   collapsedCell: Cell;
   pickedValue: TileDef;
-  discardedValues: Array<{ coords: Coords, tiles: TileDef[], collapsed: boolean }>;
+  discardedValues: Array<{
+    coords: Coords;
+    tiles: TileDef[];
+    collapsed: boolean;
+  }>;
   backtrack?: boolean;
-}
+};
 
 export class WFC {
   private tileDefs: TileDef[];
@@ -39,8 +43,8 @@ export class WFC {
   }
 
   initializeGrid() {
-    let iterator = this.grid.iterate();
-    for (let [cells, [x, y]] of iterator) {
+    const iterator = this.grid.iterate();
+    for (const [cells, [x, y]] of iterator) {
       // Initialize all tiles with all possible tile definitions
       this.grid.set([x, y], {
         choices: [...this.tileDefs],
@@ -57,8 +61,8 @@ export class WFC {
 
   get completed(): boolean {
     // Return true if all cells have been collapsed, that is, they only have one possible tile definition
-    let iterator = this.grid.iterate();
-    for (let [cell, _] of iterator) {
+    const iterator = this.grid.iterate();
+    for (const [cell, _] of iterator) {
       if (!cell.collapsed) {
         return false;
       }
@@ -66,37 +70,43 @@ export class WFC {
     return true;
   }
 
-  generate(): { collapsed: Cell[], reverted: Cell[] } {
+  generate(): { collapsed: Cell[]; reverted: Cell[] } {
     // console.log('=======================================')
-    let cells = this.grid.getCells();
-    let uncollapsed = cells.filter(cell => !cell.collapsed)
+    const cells = this.grid.getCells();
+    const uncollapsed = cells.filter((cell) => !cell.collapsed);
     if (uncollapsed.length === 0) {
       return { collapsed: [], reverted: [] };
     }
-    let lowestEntropy:Cell = this.getLowestEntropyTile(uncollapsed);
+    const lowestEntropy: Cell = this.getLowestEntropyTile(uncollapsed);
     // console.log('Lowest entropy:', lowestEntropy.coords);
     // let collapseValue:TileDef = pick(lowestEntropy.choices.filter(choice => !lowestEntropy.forbidden.includes(choice)));
-    let collapseValue:TileDef = this.pick(lowestEntropy.choices);
+    const collapseValue: TileDef = this.pick(lowestEntropy.choices);
 
     // Collapse the tile
-    let delta: DeltaChange<[number, number]> = this.collapse(lowestEntropy, collapseValue);
+    const delta: DeltaChange<[number, number]> = this.collapse(
+      lowestEntropy,
+      collapseValue,
+    );
     if (delta.backtrack) {
       // console.log('Some backtracking is needed');
       // console.log('---')
       // debugWFC();
       // console.log('\n---')
       // debugDelta(delta);
-      throw 'Backtracking is needed';
+      throw "Backtracking is needed";
 
       this.deltaStack.push(delta);
-      let backtracked = this.backtrack();
+      const backtracked = this.backtrack();
       // console.log('Backtracked:', backtracked.map(c => c.coords));
       // Debug the whole grid
       return { collapsed: [], reverted: backtracked };
     } else {
       // Save the delta in the queue and return the changed cells
       this.deltaStack.push(delta);
-      let collapsed = delta.discardedValues.filter(d => d.collapsed).map(d => this.grid.get(d.coords)).filter(c => c !== null) as Cell[];
+      const collapsed = delta.discardedValues
+        .filter((d) => d.collapsed)
+        .map((d) => this.grid.get(d.coords))
+        .filter((c) => c !== null) as Cell[];
       return { collapsed, reverted: [] };
     }
     // return { collapsed, reverted };
@@ -107,32 +117,36 @@ export class WFC {
   }
 
   backtrack(): Cell[] {
-    console.log('Backtracking');
-    let delta = this.deltaStack.pop();
+    console.log("Backtracking");
+    const delta = this.deltaStack.pop();
     if (delta) {
       return this.undoChange(delta);
     } else {
-      throw 'Cannot backtrack'
+      throw "Cannot backtrack";
     }
   }
 
-  collapse(cell: Cell, tile: TileDef) : DeltaChange<[number, number]> {
+  collapse(cell: Cell, tile: TileDef): DeltaChange<[number, number]> {
     // console.log('Collapsing to:', tile.name, 'at', cell.coords);
-    let previousChoices = [...cell.choices];
-    let removed = previousChoices.filter(c => c !== tile);
+    const previousChoices = [...cell.choices];
+    const removed = previousChoices.filter((c) => c !== tile);
     cell.collapsed = true;
     cell.choices = [tile];
 
-    let delta: DeltaChange<[number, number]> = this.propagate(cell, tile);
+    const delta: DeltaChange<[number, number]> = this.propagate(cell, tile);
 
     // Add the cell to the delta
     delta.collapsedCell = cell;
     delta.pickedValue = tile;
-    delta.discardedValues.push({ coords: cell.coords, tiles: removed, collapsed: cell.collapsed });
+    delta.discardedValues.push({
+      coords: cell.coords,
+      tiles: removed,
+      collapsed: cell.collapsed,
+    });
 
     // From the cells that changed, collapse those with only one possible tile definition, or mark backtracking if any cell has no possible tile definitions
-    for (let { coords, tiles, collapsed } of delta.discardedValues) {
-      let cell = this.grid.get(coords);
+    for (const { coords, tiles, collapsed } of delta.discardedValues) {
+      const cell = this.grid.get(coords);
       if (cell && cell.choices.length === 0) {
         delta.backtrack = true;
       }
@@ -143,14 +157,13 @@ export class WFC {
     return delta;
   }
 
-
   // Return the tile with the least amount of possible tile definitions.
   // In case of a tie, return a random one.
-  getLowestEntropyTile(cells:Cell[]): Cell {
+  getLowestEntropyTile(cells: Cell[]): Cell {
     let candidates: Cell[] = [];
     let minEntropy = Number.MAX_SAFE_INTEGER;
-    for (let cell of cells) {
-      let entropy = cell.choices.length;
+    for (const cell of cells) {
+      const entropy = cell.choices.length;
       if (entropy < minEntropy) {
         minEntropy = entropy;
         candidates = [cell];
@@ -164,22 +177,26 @@ export class WFC {
   // TODO: This implementation is naive, in that it iterates over all the cells and checks
   // only once, instead of propagating from the changed values until no more changes are made.
   propagate(cell: Cell, collapseValue: TileDef): DeltaChange<[number, number]> {
-    let iterator = this.grid.iterate();
-    let changedValues: DeltaChange<[number, number]> = {
+    const iterator = this.grid.iterate();
+    const changedValues: DeltaChange<[number, number]> = {
       collapsedCell: cell,
       pickedValue: collapseValue,
-      discardedValues: []
+      discardedValues: [],
     };
-    for (let [cell, [x, y]] of iterator) {
+    for (const [cell, [x, y]] of iterator) {
       if (cell.collapsed) {
         continue;
       }
-      let currentOptions = [...cell.choices];
-      let neighbors = this.grid.getNeighbors([x, y]);
+      const currentOptions = [...cell.choices];
+      const neighbors = this.grid.getNeighbors([x, y]);
       for (let i = 0; i < neighbors.length; i++) {
-        let neighbor = neighbors[i];
+        const neighbor = neighbors[i];
         if (neighbor) {
-          let validAdjacencies = this.filterValidAdjacencies(cell, neighbor, i);
+          const validAdjacencies = this.filterValidAdjacencies(
+            cell,
+            neighbor,
+            i,
+          );
           cell.choices = validAdjacencies;
         }
       }
@@ -189,21 +206,30 @@ export class WFC {
         // changedValues.discardedValues.push({ coords: [x, y], tiles: currentOptions, collapsed: cell.collapsed });
         // Only push the removed values if they are different from the collapse value
         // let removed = currentOptions.filter(c => c !== collapseValue);
-        let removed = currentOptions.filter(c => !cell.choices.includes(c));
+        const removed = currentOptions.filter((c) => !cell.choices.includes(c));
         // console.log('Removed:', removed.map(c => c.name), 'from', cell.coords, 'remaining:', cell.choices.map(c => c.name));
-        changedValues.discardedValues.push({ coords: [x, y], tiles: removed, collapsed: cell.collapsed });
+        changedValues.discardedValues.push({
+          coords: [x, y],
+          tiles: removed,
+          collapsed: cell.collapsed,
+        });
       }
     }
     return changedValues;
   }
 
   // TODO: Implementation is quadratic, can be optimized by precalculating the total of possible adjacencies
-  filterValidAdjacencies(cell: Cell, neighbor: Cell, direction: number): TileDef[] {
-    let valid = [];
-    for (let option of cell.choices) {
-      for (let adjacentOption of neighbor.choices) {
-        let d1 = option.adjacencies[direction];
-        let d2 = adjacentOption.adjacencies[this.grid.adjacencyMap[direction]];
+  filterValidAdjacencies(
+    cell: Cell,
+    neighbor: Cell,
+    direction: number,
+  ): TileDef[] {
+    const valid = [];
+    for (const option of cell.choices) {
+      for (const adjacentOption of neighbor.choices) {
+        const d1 = option.adjacencies[direction];
+        const d2 =
+          adjacentOption.adjacencies[this.grid.adjacencyMap[direction]];
         if (d1 === d2) {
           valid.push(option);
           break;
@@ -214,13 +240,13 @@ export class WFC {
   }
 
   undoChange(delta: DeltaChange<[number, number]>): Cell[] {
-    let revertedCells = [];
-    let { collapsedCell, pickedValue, discardedValues } = delta;
+    const revertedCells = [];
+    const { collapsedCell, pickedValue, discardedValues } = delta;
     collapsedCell.collapsed = false;
     // collapsedCell.choices = [...discardedValues[0].tiles];
     collapsedCell.forbidden.push(pickedValue);
-    for (let { coords, tiles, collapsed } of discardedValues) {
-      let cell = this.grid.get(coords);
+    for (const { coords, tiles, collapsed } of discardedValues) {
+      const cell = this.grid.get(coords);
       if (cell) {
         // Add back the removed tiles
         // console.log('Adding back:', tiles.map(t => t.name), 'to', cell.coords, cell.choices.map(t => t.name));
@@ -231,5 +257,4 @@ export class WFC {
     }
     return revertedCells;
   }
-
 }
