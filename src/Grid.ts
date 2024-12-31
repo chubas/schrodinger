@@ -28,11 +28,17 @@ export class SquareGrid implements Grid<[number, number]> {
     // Initialize the grid with empty cells
     this.width = width;
     this.height = height;
-    this.cells = new Array(width * height).fill({
-      choices: [],
-      collapsed: false,
-      forbidden: [],
-    });
+    this.cells = [];
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        this.cells.push({
+          choices: [],
+          collapsed: false,
+          forbidden: [],
+          coords: [x, y],
+        });
+      }
+    }
   }
 
   *iterate(): IterableIterator<[Cell, [number, number]]> {
