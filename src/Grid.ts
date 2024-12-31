@@ -1,20 +1,20 @@
 import { TileDef } from "./TileDef.js";
 
-export type Cell = {
+export type Cell<Coords = any> = {
   choices: TileDef[];
   collapsed: boolean;
   forbidden: TileDef[];
-  coords: any; // TODO: How to specify the variable type?
+  coords: Coords;
 };
 
 export interface Grid<Coords = any> {
   // Define a method for iterating, a getter and setter with variable attributes (ex: x, y), and a method to get neighbors
 
-  iterate(): IterableIterator<[Cell, Coords]>;
-  get(coords: Coords): Cell | null;
-  set(coords: Coords, cell: Cell): void;
-  getNeighbors(coords: Coords): (Cell | null)[];
-  getCells(): Cell[];
+  iterate(): IterableIterator<[Cell<Coords>, Coords]>;
+  get(coords: Coords): Cell<Coords> | null;
+  set(coords: Coords, cell: Cell<Coords>): void;
+  getNeighbors(coords: Coords): (Cell<Coords> | null)[];
+  getCells(): Cell<Coords>[];
   // Adjacency map is an array, where for each cell in the TileDef grid, its index indicates the index of the neighbor it matches
   adjacencyMap: number[];
 }
