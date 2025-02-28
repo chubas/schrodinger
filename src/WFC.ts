@@ -20,6 +20,12 @@ export type DeltaChange<Coords> = {
   backtrack?: boolean;
 };
 
+interface ProposedChange {
+  cell: Cell;
+  newChoices: TileDef[];
+  originalChoices: TileDef[];
+}
+
 export class WFC {
   private tileDefs: TileDef[];
   private options: Required<WFCOptions>;
@@ -88,11 +94,11 @@ export class WFC {
       collapseValue,
     );
     if (delta.backtrack) {
-      // console.log('Some backtracking is needed');
+      console.log('Some backtracking is needed');
       // console.log('---')
       // debugWFC();
       // console.log('\n---')
-      // debugDelta(delta);
+      debugDelta(delta);
       throw "Backtracking is needed";
 
       this.deltaStack.push(delta);
@@ -174,48 +180,126 @@ export class WFC {
     return this.pick(candidates);
   }
 
-  // TODO: This implementation is naive, in that it iterates over all the cells and checks
-  // only once, instead of propagating from the changed values until no more changes are made.
+  // Modified propagate method to use two-phase approach
   propagate(cell: Cell, collapseValue: TileDef): DeltaChange<[number, number]> {
-    const iterator = this.grid.iterate();
+    const proposedChanges = new Map<string, ProposedChange>();
     const changedValues: DeltaChange<[number, number]> = {
       collapsedCell: cell,
       pickedValue: collapseValue,
       discardedValues: [],
     };
-    for (const [cell, [x, y]] of iterator) {
-      if (cell.collapsed) {
-        continue;
-      }
-      const currentOptions = [...cell.choices];
-      const neighbors = this.grid.getNeighbors([x, y]);
+
+    // Phase 1: Collect all potential changes without applying them
+    const cellsToProcess = [cell];
+    const processedCells = new Set<string>();
+
+    while (cellsToProcess.length > 0) {
+      const currentCell = cellsToProcess.shift()!;
+      const cellKey = `${currentCell.coords[0]},${currentCell.coords[1]}`;
+
+      if (processedCells.has(cellKey)) continue;
+      processedCells.add(cellKey);
+
+      const neighbors = this.grid.getNeighbors(currentCell.coords);
       for (let i = 0; i < neighbors.length; i++) {
         const neighbor = neighbors[i];
-        if (neighbor) {
-          const validAdjacencies = this.filterValidAdjacencies(
-            cell,
-            neighbor,
-            i,
-          );
-          cell.choices = validAdjacencies;
+        if (!neighbor || neighbor.collapsed) continue;
+
+        const neighborKey = `${neighbor.coords[0]},${neighbor.coords[1]}`;
+        if (processedCells.has(neighborKey)) continue;
+
+        const validAdjacencies = this.filterValidAdjacencies(neighbor, currentCell, i);
+
+        // Only track changes if the choices would actually change
+        if (validAdjacencies.length !== neighbor.choices.length) {
+          proposedChanges.set(neighborKey, {
+            cell: neighbor,
+            newChoices: validAdjacencies,
+            originalChoices: [...neighbor.choices]
+          });
+          cellsToProcess.push(neighbor);
         }
       }
-      // console.log('Comparing:', currentOptions.map(c => c.name).join(','), 'vs', cell.choices.map(c => c.name).join(','), 'at', cell.coords);
-      // Check if the cell has changed
-      if (currentOptions.length !== cell.choices.length) {
-        // changedValues.discardedValues.push({ coords: [x, y], tiles: currentOptions, collapsed: cell.collapsed });
-        // Only push the removed values if they are different from the collapse value
-        // let removed = currentOptions.filter(c => c !== collapseValue);
-        const removed = currentOptions.filter((c) => !cell.choices.includes(c));
-        // console.log('Removed:', removed.map(c => c.name), 'from', cell.coords, 'remaining:', cell.choices.map(c => c.name));
+    }
+
+    // Phase 2: Validate and apply changes
+    const invalidChanges = this.validateProposedChanges(proposedChanges);
+    if (invalidChanges.size > 0) {
+      // If we found invalid changes, mark for backtracking
+      changedValues.backtrack = true;
+      return changedValues;
+    }
+
+    // Apply all valid changes
+    for (const [key, change] of proposedChanges) {
+      const { cell, newChoices, originalChoices } = change;
+      cell.choices = newChoices;
+
+      // Track removed choices for the delta
+      const removed = originalChoices.filter(c => !newChoices.includes(c));
+      if (removed.length > 0) {
         changedValues.discardedValues.push({
-          coords: [x, y],
+          coords: cell.coords,
           tiles: removed,
-          collapsed: cell.collapsed,
+          collapsed: cell.collapsed
         });
       }
+
+      // Auto-collapse if only one choice remains
+      if (newChoices.length === 1 && !cell.collapsed) {
+        cell.collapsed = true;
+      }
     }
+
     return changedValues;
+  }
+
+  // Helper method to validate proposed changes
+  private validateProposedChanges(proposedChanges: Map<string, ProposedChange>): Set<string> {
+    const invalidChanges = new Set<string>();
+
+    for (const [key, change] of proposedChanges) {
+      const { cell, newChoices } = change;
+
+      // Check if cell would have no valid choices
+      if (newChoices.length === 0) {
+        invalidChanges.add(key);
+        continue;
+      }
+
+      // Check if changes would create conflicts with neighbors
+      const neighbors = this.grid.getNeighbors(cell.coords);
+      for (let i = 0; i < neighbors.length; i++) {
+        const neighbor = neighbors[i];
+        if (!neighbor) continue;
+
+        const neighborKey = `${neighbor.coords[0]},${neighbor.coords[1]}`;
+        const neighborChoices = proposedChanges.has(neighborKey)
+          ? proposedChanges.get(neighborKey)!.newChoices
+          : neighbor.choices;
+
+        // Check if there's at least one valid adjacency between the cells
+        let hasValidAdjacency = false;
+        for (const option of newChoices) {
+          for (const neighborOption of neighborChoices) {
+            const d1 = option.adjacencies[i];
+            const d2 = neighborOption.adjacencies[this.grid.adjacencyMap[i]];
+            if (d1 === d2) {
+              hasValidAdjacency = true;
+              break;
+            }
+          }
+          if (hasValidAdjacency) break;
+        }
+
+        if (!hasValidAdjacency) {
+          invalidChanges.add(key);
+          break;
+        }
+      }
+    }
+
+    return invalidChanges;
   }
 
   // TODO: Implementation is quadratic, can be optimized by precalculating the total of possible adjacencies

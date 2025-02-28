@@ -84,8 +84,9 @@ const tiledefs: TileDef[] = [
 const rngs: number[] = [];
 const grid = new SquareGrid(3, 3);
 // let r = Math.floor(Math.random() * 10000);
-const r = process.argv[2] || 100;
-// let r = "63";
+// const r = process.argv[2] || 100;
+let r = "65"; // This seed fails with an uncollapsable error
+// let r = "63"; // requires backtracking
 // console.log('Initial seed:', r);
 
 const random = new SeedRandom(r);
@@ -122,8 +123,8 @@ const debugWFC = (clean = false) => {
 let maxTries = 10000;
 while (!wfc.completed && maxTries > 0) {
   maxTries--;
-  // debugWFC();
-  // console.log('\n')
+  debugWFC();
+  console.log('\n')
   const { collapsed, reverted } = wfc.generate();
   console.log(
     "Collapsed:",

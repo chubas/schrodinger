@@ -8,8 +8,6 @@ export type Cell<Coords = any> = {
 };
 
 export interface Grid<Coords = any> {
-  // Define a method for iterating, a getter and setter with variable attributes (ex: x, y), and a method to get neighbors
-
   iterate(): IterableIterator<[Cell<Coords>, Coords]>;
   get(coords: Coords): Cell<Coords> | null;
   set(coords: Coords, cell: Cell<Coords>): void;
@@ -82,7 +80,6 @@ export class SquareGrid implements Grid<[number, number]> {
   set([x, y]: [number, number], cell: Cell) {
     const n = this.width * y + x;
     if (n < 0 || n >= this.cells.length) {
-      // console.log('Out of bounds', x, y, n, this.cells.length);
       return;
     }
     this.cells[n] = cell;
