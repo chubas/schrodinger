@@ -1,7 +1,8 @@
 import { SquareGrid } from "./Grid.js";
-import { DeltaChange, WFC } from "./WFC.js";
+import { DeltaChange, WFC, CellCollapse } from "./WFC.js";
 import { TileDef } from "./TileDef.js";
 import { RandomLib } from "./RandomLib.js";
+import { Cell } from "./Grid.js";
 import { debugDelta } from "./util.js";
 import seedrandom from "seedrandom";
 
@@ -85,9 +86,9 @@ const rngs: number[] = [];
 const grid = new SquareGrid(3, 3);
 // let r = Math.floor(Math.random() * 10000);
 // const r = process.argv[2] || 100;
-let r = "65"; // This seed fails with an uncollapsable error
-// let r = "63"; // requires backtracking
-// console.log('Initial seed:', r);
+// let r = "1"; // This seed fails with an uncollapsable error
+let r = "321"; // requires backtracking
+console.log('Initial seed:', r);
 
 const random = new SeedRandom(r);
 
@@ -99,6 +100,7 @@ const debugQueue = (queue: DeltaChange<[number, number]>[]) => {
 };
 
 const wfc = new WFC(tiledefs, grid, { random });
+
 const debugWFC = (clean = false) => {
   // Iterate over all the tiles in the grid, and draw them
   const iterator = grid.iterate();
@@ -120,47 +122,37 @@ const debugWFC = (clean = false) => {
   }
 };
 
-let maxTries = 10000;
-while (!wfc.completed && maxTries > 0) {
-  maxTries--;
+// Set up event listeners
+wfc.on('collapse', (group) => {
   debugWFC();
-  console.log('\n')
-  const { collapsed, reverted } = wfc.generate();
-  console.log(
-    "Collapsed:",
-    collapsed.map((c) => c.coords),
-    "Reverted:",
-    reverted.map((c) => c.coords),
-  );
-}
+  console.log('\nCollapsed:', group.cells.map((c: CellCollapse) => c.coords), ' due to ', group.cause);
+});
 
-debugWFC(true);
-// console.log('\n')
-console.log("Seed:", r);
-console.log(rngs.map((n) => n.toFixed(2)).join(","));
+wfc.on('propagate', (cells) => {
+  console.log('Propagated to:', cells.map((c: Cell) => c.coords));
+});
 
-// Try with seeds from 0 to 100, until one fails, to find a seed that fails
-// let seed = 0;
-// let seedFound = false;
-// while (!seedFound && seed < 100) {
-//   // console.log('Trying seed:', seed);
-//   random.setSeed('' + seed);
-//   grid = new SquareGrid(4, 4);
-//   wfc = new WFC(tiledefs, grid, { random });
-//   try {
-//     while (!wfc.completed && maxTries > 0) {
-//       maxTries--;
-//       let { collapsed, reverted } = wfc.generate();
-//     }
-//     console.log('Seed', seed, 'succeeded');
-//   } catch (e) {
-//     console.log('Backtracking needed on seed', seed);
-//     debugWFC(true);
-//     console.log("\n");
-//   }
-//   seed++
-// }
+wfc.on('backtrack', (from) => {
+  console.log('Backtracking from:', from.cells.map((c: CellCollapse) => c.coords));
+  console.log('RNG sequence:', rngs.map((n) => n.toFixed(2)).join(","));
+});
 
-// For testing, use this seed rng
-// 0.22,0.56,0.90,0.98,0.39,0.03,0.99,0.99,0.25,0.80,0.16,0.21,0.19,0.51,0.51,0.66,0.91,0.79,0.61,0.16,0.09,0.03,0.08,0.54,0.89,0.79,0.17,0.80,0.56,0.69,0.89,0.74,0.90,0.51,0.75,0.15,0.19,0.71,0.57,0.75,0.67,0.60,0.70,0.11,0.03,0.93,0.12,0.11,0.52,0.54,0.80,0.93,0.27,0.72,0.95,0.97,0.32,0.77,0.18,0.02,0.59,0.84
-// In a 6 by 6 grid
+wfc.on('complete', () => {
+  console.log('\nWFC completed successfully!');
+  debugWFC(true);
+  console.log('\nRNG sequence:', rngs.map((n) => n.toFixed(2)).join(","));
+});
+
+wfc.on('error', (error) => {
+  console.error('Error during WFC:', error);
+  debugWFC(true);
+  console.log('\nRNG sequence:', rngs.map((n) => n.toFixed(2)).join(","));
+  // exit with error code
+  process.exit(1);
+});
+
+// Start the WFC process
+wfc.start();
+
+// Remove the old while loop since the process is now event-driven
+// ... rest of the existing code ...

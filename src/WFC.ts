@@ -2,11 +2,36 @@ import { RandomLib, DefaultRandom } from "./RandomLib.js";
 import { TileDef } from "./TileDef.js";
 import { Grid, Cell } from "./Grid.js";
 import { debugDelta } from "./util.js";
+import { EventEmitter } from "events";
 
 export type WFCOptions = {
   maxRetries?: number;
   backtrackStep?: number;
   random?: RandomLib;
+};
+
+export type CellCollapse = {
+  coords: [number, number];
+  value?: TileDef;  // If undefined, will pick based on entropy
+};
+
+export type CollapseGroup = {
+  cells: CellCollapse[];
+  cause: 'initial' | 'entropy' | 'propagation';
+};
+
+export type CollapseResult = {
+  success: boolean;
+  affectedCells: Cell[];
+  propagatedCollapses?: CollapseGroup[];
+};
+
+export type WFCEvents = {
+  'collapse': (group: CollapseGroup) => void;
+  'propagate': (cells: Cell[]) => void;
+  'backtrack': (from: CollapseGroup) => void;
+  'complete': () => void;
+  'error': (error: Error) => void;
 };
 
 export type DeltaChange<Coords> = {
@@ -26,15 +51,20 @@ interface ProposedChange {
   originalChoices: TileDef[];
 }
 
-export class WFC {
+export class WFC extends EventEmitter {
   private tileDefs: TileDef[];
   private options: Required<WFCOptions>;
   private retries: number;
   private grid: Grid;
   private rng: RandomLib;
   private deltaStack: DeltaChange<[number, number]>[];
+  private collapseQueue: CollapseGroup[] = [];
+  private propagationQueue: Set<Cell> = new Set();
+  private snapshots: Map<number, Grid> = new Map();
+  private snapshotCounter: number = 0;
 
   constructor(tileDefs: TileDef[], grid: Grid, options: WFCOptions = {}) {
+    super();
     this.tileDefs = tileDefs;
     this.grid = grid;
     this.initializeGrid();
@@ -76,91 +106,193 @@ export class WFC {
     return true;
   }
 
-  generate(): { collapsed: Cell[]; reverted: Cell[] } {
-    // console.log('=======================================')
-    const cells = this.grid.getCells();
-    const uncollapsed = cells.filter((cell) => !cell.collapsed);
-    if (uncollapsed.length === 0) {
-      return { collapsed: [], reverted: [] };
-    }
-    const lowestEntropy: Cell = this.getLowestEntropyTile(uncollapsed);
-    // console.log('Lowest entropy:', lowestEntropy.coords);
-    // let collapseValue:TileDef = pick(lowestEntropy.choices.filter(choice => !lowestEntropy.forbidden.includes(choice)));
-    const collapseValue: TileDef = this.pick(lowestEntropy.choices);
+  start(initialSeed?: CellCollapse[]): void {
+    try {
+      if (initialSeed && initialSeed.length > 0) {
+        this.collapseQueue.push({
+          cells: initialSeed,
+          cause: 'initial'
+        });
+      } else {
+        // Start with lowest entropy cell
+        const uncollapsed = this.grid.getCells().filter(cell => !cell.collapsed);
+        if (uncollapsed.length === 0) {
+          this.emit('complete');
+          return;
+        }
+        const lowestEntropy = this.getLowestEntropyTile(uncollapsed);
+        this.collapseQueue.push({
+          cells: [{
+            coords: lowestEntropy.coords,
+            value: undefined
+          }],
+          cause: 'entropy'
+        });
+      }
 
-    // Collapse the tile
-    const delta: DeltaChange<[number, number]> = this.collapse(
-      lowestEntropy,
-      collapseValue,
-    );
-    if (delta.backtrack) {
-      console.log('Some backtracking is needed');
-      // console.log('---')
-      // debugWFC();
-      // console.log('\n---')
-      debugDelta(delta);
-      throw "Backtracking is needed";
-
-      this.deltaStack.push(delta);
-      const backtracked = this.backtrack();
-      // console.log('Backtracked:', backtracked.map(c => c.coords));
-      // Debug the whole grid
-      return { collapsed: [], reverted: backtracked };
-    } else {
-      // Save the delta in the queue and return the changed cells
-      this.deltaStack.push(delta);
-      const collapsed = delta.discardedValues
-        .filter((d) => d.collapsed)
-        .map((d) => this.grid.get(d.coords))
-        .filter((c) => c !== null) as Cell[];
-      return { collapsed, reverted: [] };
-    }
-    // return { collapsed, reverted };
-
-    // lowestEntropy.collapsed = true;
-    // lowestEntropy.choices = [collapseValue];
-    // added.push(lowestEntropy);
-  }
-
-  backtrack(): Cell[] {
-    console.log("Backtracking");
-    const delta = this.deltaStack.pop();
-    if (delta) {
-      return this.undoChange(delta);
-    } else {
-      throw "Cannot backtrack";
+      this.processCollapseQueue();
+    } catch (error) {
+      this.emit('error', error);
     }
   }
 
-  collapse(cell: Cell, tile: TileDef): DeltaChange<[number, number]> {
-    // console.log('Collapsing to:', tile.name, 'at', cell.coords);
-    const previousChoices = [...cell.choices];
-    const removed = previousChoices.filter((c) => c !== tile);
-    cell.collapsed = true;
-    cell.choices = [tile];
+  private processCollapseQueue(): void {
+    while (this.collapseQueue.length > 0) {
+      const currentGroup = this.collapseQueue.shift()!;
 
-    const delta: DeltaChange<[number, number]> = this.propagate(cell, tile);
+      // Take a snapshot before attempting collapse
+      const snapshotId = this.takeSnapshot();
 
-    // Add the cell to the delta
-    delta.collapsedCell = cell;
-    delta.pickedValue = tile;
-    delta.discardedValues.push({
-      coords: cell.coords,
-      tiles: removed,
-      collapsed: cell.collapsed,
-    });
+      try {
+        const result = this.collapseGroup(currentGroup);
+        if (!result.success) {
+          // Restore from snapshot and trigger backtrack
+          this.restoreSnapshot(snapshotId);
+          this.emit('backtrack', currentGroup);
+          return;
+        }
 
-    // From the cells that changed, collapse those with only one possible tile definition, or mark backtracking if any cell has no possible tile definitions
-    for (const { coords, tiles, collapsed } of delta.discardedValues) {
-      const cell = this.grid.get(coords);
-      if (cell && cell.choices.length === 0) {
-        delta.backtrack = true;
-      }
-      if (cell && cell.choices.length === 1 && !cell.collapsed) {
-        cell.collapsed = true;
+        this.emit('collapse', currentGroup);
+
+        // Add any new collapses from propagation to the queue
+        if (result.propagatedCollapses) {
+          this.collapseQueue.push(...result.propagatedCollapses);
+        }
+
+        // If queue is empty but we still have uncollapsed cells, add lowest entropy
+        if (this.collapseQueue.length === 0 && !this.completed) {
+          const uncollapsed = this.grid.getCells().filter(cell => !cell.collapsed);
+          if (uncollapsed.length > 0) {
+            const lowestEntropy = this.getLowestEntropyTile(uncollapsed);
+            this.collapseQueue.push({
+              cells: [{
+                coords: lowestEntropy.coords,
+                value: undefined
+              }],
+              cause: 'entropy'
+            });
+          }
+        }
+      } catch (error) {
+        // Restore from snapshot
+        this.restoreSnapshot(snapshotId);
+        throw error;
+      } finally {
+        // Clean up snapshot
+        this.snapshots.delete(snapshotId);
       }
     }
-    return delta;
+
+    if (this.completed) {
+      this.emit('complete');
+    }
+  }
+
+  private collapseGroup(group: CollapseGroup): CollapseResult {
+    console.log('Attempting to collapse group:', group.cells.map(c => c.coords), ' due to ', group.cause);
+    const affectedCells: Cell[] = [];
+    const propagatedCollapses: CollapseGroup[] = [];
+
+    // First pass: collapse all cells in the group
+    for (const cellCollapse of group.cells) {
+      const cell = this.grid.get(cellCollapse.coords);
+      if (!cell) continue;
+
+      const value = cellCollapse.value ?? this.pick(cell.choices);
+      console.log('Picked value:', value.name, 'for cell', cell.coords);
+      if (!cell.choices.includes(value)) {
+        return { success: false, affectedCells: [] };
+      }
+
+      cell.collapsed = true;
+      cell.choices = [value];
+      affectedCells.push(cell);
+    }
+
+    // Second pass: propagate from all collapsed cells
+    this.propagationQueue.clear();
+    for (const cell of affectedCells) {
+      this.queueNeighborsForPropagation(cell);
+    }
+
+    // Process propagation queue until empty
+    while (this.propagationQueue.size > 0) {
+      const currentCell = this.propagationQueue.values().next().value;
+      if (!currentCell) continue;  // TypeScript safety
+
+      this.propagationQueue.delete(currentCell);
+      const originalChoices = [...currentCell.choices];
+      const neighbors = this.grid.getNeighbors(currentCell.coords);
+
+      // Update choices based on all neighbors
+      for (let i = 0; i < neighbors.length; i++) {
+        const neighbor = neighbors[i];
+        if (!neighbor) continue;
+
+        const validChoices = this.filterValidAdjacencies(currentCell, neighbor, i);
+        currentCell.choices = currentCell.choices.filter(choice => validChoices.includes(choice));
+      }
+
+      // If choices changed, queue neighbors for propagation
+      if (currentCell.choices.length !== originalChoices.length) {
+
+        // Log which choices were removed
+        const removedChoices = originalChoices.filter(c => !currentCell.choices.includes(c));
+        console.log('Removed choices:', removedChoices.map(c => c.name), 'for cell', currentCell.coords, ' remain: ', currentCell.choices.map(c => c.name));
+
+        affectedCells.push(currentCell);
+
+        // If no choices left, collapse has failed
+        if (currentCell.choices.length === 0) {
+          return { success: false, affectedCells };
+        }
+
+        // If only one choice left, add to collapse queue
+        if (currentCell.choices.length === 1 && !currentCell.collapsed) {
+          propagatedCollapses.push({
+            cells: [{
+              coords: currentCell.coords,
+              value: currentCell.choices[0]
+            }],
+            cause: 'propagation'
+          });
+        }
+
+        this.queueNeighborsForPropagation(currentCell);
+      }
+    }
+
+    this.emit('propagate', affectedCells);
+    return {
+      success: true,
+      affectedCells,
+      propagatedCollapses: propagatedCollapses.length > 0 ? propagatedCollapses : undefined
+    };
+  }
+
+  private queueNeighborsForPropagation(cell: Cell): void {
+    const neighbors = this.grid.getNeighbors(cell.coords);
+    for (const neighbor of neighbors) {
+      if (neighbor && !neighbor.collapsed) {
+        this.propagationQueue.add(neighbor);
+      }
+    }
+  }
+
+  private takeSnapshot(): number {
+    // For now, just do a deep copy - can be optimized later
+    const snapshot = JSON.parse(JSON.stringify(this.grid));
+    const id = this.snapshotCounter++;
+    this.snapshots.set(id, snapshot);
+    return id;
+  }
+
+  private restoreSnapshot(id: number): void {
+    const snapshot = this.snapshots.get(id);
+    if (!snapshot) {
+      throw new Error(`Snapshot ${id} not found`);
+    }
+    this.grid = snapshot;
   }
 
   // Return the tile with the least amount of possible tile definitions.
@@ -221,6 +353,7 @@ export class WFC {
         }
       }
     }
+    console.log('Proposed changes:', proposedChanges);
 
     // Phase 2: Validate and apply changes
     const invalidChanges = this.validateProposedChanges(proposedChanges);

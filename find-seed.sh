@@ -1,7 +1,7 @@
 #!/bin/bash
 for i in {1..1000}; do
     echo "> $i"
-    ts-node src/WFC.ts $i >/dev/null 2>&1 # Run the program and suppress output
+    node dist/index.js $i # >/dev/null 2>&1 # Run the program and suppress output
     if [ $? -ne 0 ]; then # Check the exit code
         echo "Program failed for argument: $i"
         exit 0
