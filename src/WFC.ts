@@ -18,6 +18,7 @@ export type CellCollapse = {
 export type CollapseGroup = {
   cells: CellCollapse[];
   cause: 'initial' | 'entropy' | 'propagation';
+  maxAttempts?: number;  // Optional limit for retries at this level
 };
 
 export type CollapseResult = {
@@ -51,6 +52,15 @@ interface ProposedChange {
   originalChoices: TileDef[];
 }
 
+// Add new types for backtracking
+type BacktrackState = {
+  snapshotId: number;
+  group: CollapseGroup;
+  triedValues: Map<string, Set<TileDef>>;  // coords string -> tried values
+  parentState?: BacktrackState;  // Link to previous state for multi-level backtrack
+  attempts: number;
+};
+
 export class WFC extends EventEmitter {
   private tileDefs: TileDef[];
   private options: Required<WFCOptions>;
@@ -62,6 +72,8 @@ export class WFC extends EventEmitter {
   private propagationQueue: Set<Cell> = new Set();
   private snapshots: Map<number, Grid> = new Map();
   private snapshotCounter: number = 0;
+  private currentBacktrackState?: BacktrackState;
+  private readonly MAX_ATTEMPTS_PER_LEVEL = 10;  // Configurable
 
   constructor(tileDefs: TileDef[], grid: Grid, options: WFCOptions = {}) {
     super();
@@ -140,24 +152,31 @@ export class WFC extends EventEmitter {
     while (this.collapseQueue.length > 0) {
       const currentGroup = this.collapseQueue.shift()!;
 
-      // Take a snapshot before attempting collapse
+      // Create new backtrack state
       const snapshotId = this.takeSnapshot();
+      const backtrackState: BacktrackState = {
+        snapshotId,
+        group: currentGroup,
+        triedValues: new Map(),
+        attempts: 0,
+        parentState: this.currentBacktrackState
+      };
+
+      this.currentBacktrackState = backtrackState;
 
       try {
-        const result = this.collapseGroup(currentGroup);
-        if (!result.success) {
-          // Restore from snapshot and trigger backtrack
-          this.restoreSnapshot(snapshotId);
-          this.emit('backtrack', currentGroup);
-          return;
+        const success = this.attemptCollapseWithRetries(backtrackState);
+        if (!success) {
+          // If we couldn't collapse even with retries, we need to go back further
+          if (!this.handleMultiLevelBacktrack()) {
+            throw new Error("Pattern is uncollapsable - no valid solutions found");
+          }
+          continue;  // Try next iteration with backtracked state
         }
 
-        this.emit('collapse', currentGroup);
-
-        // Add any new collapses from propagation to the queue
-        if (result.propagatedCollapses) {
-          this.collapseQueue.push(...result.propagatedCollapses);
-        }
+        // Success! Clear the backtrack state at this level
+        this.currentBacktrackState = backtrackState.parentState;
+        this.snapshots.delete(snapshotId);
 
         // If queue is empty but we still have uncollapsed cells, add lowest entropy
         if (this.collapseQueue.length === 0 && !this.completed) {
@@ -174,12 +193,11 @@ export class WFC extends EventEmitter {
           }
         }
       } catch (error) {
-        // Restore from snapshot
-        this.restoreSnapshot(snapshotId);
+        // Fatal error - restore to last known good state
+        if (this.currentBacktrackState) {
+          this.restoreSnapshot(this.currentBacktrackState.snapshotId);
+        }
         throw error;
-      } finally {
-        // Clean up snapshot
-        this.snapshots.delete(snapshotId);
       }
     }
 
@@ -188,8 +206,93 @@ export class WFC extends EventEmitter {
     }
   }
 
-  private collapseGroup(group: CollapseGroup): CollapseResult {
-    console.log('Attempting to collapse group:', group.cells.map(c => c.coords), ' due to ', group.cause);
+  private attemptCollapseWithRetries(state: BacktrackState): boolean {
+    const maxAttempts = state.group.maxAttempts ?? this.MAX_ATTEMPTS_PER_LEVEL;
+
+    while (state.attempts < maxAttempts) {
+      // Restore state before each attempt (except first)
+      if (state.attempts > 0) {
+        this.restoreSnapshot(state.snapshotId);
+      }
+
+      const result = this.collapseGroupWithTracking(state);
+      if (result.success) {
+        this.emit('collapse', state.group);
+        // Add any new collapses from propagation to the queue
+        if (result.propagatedCollapses) {
+          this.collapseQueue.push(...result.propagatedCollapses);
+        }
+        return true;
+      }
+
+      state.attempts++;
+      this.emit('backtrack', {
+        ...state.group,
+        // Add debug info about tried values
+        debug: {
+          attempts: state.attempts,
+          triedValues: Array.from(state.triedValues.entries()).map(([coords, values]) => ({
+            coords,
+            values: Array.from(values).map(v => v.name)
+          }))
+        }
+      });
+
+      // Check if we've exhausted all possibilities for this group
+      if (this.hasExhaustedAllChoices(state)) {
+        console.log('Exhausted all choices for group:', state.group.cells.map(c => c.coords));
+        return false;
+      }
+
+      // Continue to next iteration which will restore state and try new values
+    }
+
+    console.log('Exceeded max attempts:', maxAttempts, 'for group:', state.group.cells.map(c => c.coords));
+    return false;  // Exceeded max attempts
+  }
+
+  private collapseGroupWithTracking(state: BacktrackState): CollapseResult {
+    const { group, triedValues } = state;
+
+    // First pass: validate and select values for collapse
+    const selectedValues = new Map<string, TileDef>();
+
+    for (const cellCollapse of group.cells) {
+      const cell = this.grid.get(cellCollapse.coords);
+      if (!cell) continue;
+
+      const coordKey = `${cellCollapse.coords[0]},${cellCollapse.coords[1]}`;
+      const tried = triedValues.get(coordKey) || new Set<TileDef>();
+
+      // Filter out already tried values
+      const availableChoices = cell.choices.filter(choice => !tried.has(choice));
+      console.log('Available choices for', cell.coords, ':', availableChoices.map(c => c.name),
+                 'after excluding tried:', Array.from(tried).map(c => c.name));
+
+      if (availableChoices.length === 0) {
+        console.log('No more available choices for cell:', cell.coords);
+        return { success: false, affectedCells: [] };
+      }
+
+      // Select new value
+      const value = cellCollapse.value ?? this.pick(availableChoices);
+      selectedValues.set(coordKey, value);
+
+      // Track this value as tried - ensure the set exists first
+      if (!triedValues.has(coordKey)) {
+        triedValues.set(coordKey, new Set());
+      }
+      triedValues.get(coordKey)!.add(value);
+
+      console.log('Trying:', value.name, 'for cell', cell.coords,
+                 '(attempt', state.attempts + 1, 'of', state.group.maxAttempts ?? this.MAX_ATTEMPTS_PER_LEVEL, ')');
+    }
+
+    // Now proceed with actual collapse using selected values
+    return this.collapseGroupWithValues(group, selectedValues);
+  }
+
+  private collapseGroupWithValues(group: CollapseGroup, selectedValues: Map<string, TileDef>): CollapseResult {
     const affectedCells: Cell[] = [];
     const propagatedCollapses: CollapseGroup[] = [];
 
@@ -198,11 +301,8 @@ export class WFC extends EventEmitter {
       const cell = this.grid.get(cellCollapse.coords);
       if (!cell) continue;
 
-      const value = cellCollapse.value ?? this.pick(cell.choices);
-      console.log('Picked value:', value.name, 'for cell', cell.coords);
-      if (!cell.choices.includes(value)) {
-        return { success: false, affectedCells: [] };
-      }
+      const coordKey = `${cellCollapse.coords[0]},${cellCollapse.coords[1]}`;
+      const value = selectedValues.get(coordKey)!;
 
       cell.collapsed = true;
       cell.choices = [value];
@@ -473,5 +573,47 @@ export class WFC extends EventEmitter {
       }
     }
     return revertedCells;
+  }
+
+  private hasExhaustedAllChoices(state: BacktrackState): boolean {
+    const { group, triedValues } = state;
+
+    for (const cellCollapse of group.cells) {
+      const cell = this.grid.get(cellCollapse.coords);
+      if (!cell) continue;
+
+      const coordKey = `${cellCollapse.coords[0]},${cellCollapse.coords[1]}`;
+      const tried = triedValues.get(coordKey) || new Set<TileDef>();
+
+      // If there are any untried choices, we haven't exhausted all possibilities
+      if (cell.choices.some(choice => !tried.has(choice))) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  private handleMultiLevelBacktrack(): boolean {
+    while (this.currentBacktrackState?.parentState) {
+      // Go up one level
+      const parentState = this.currentBacktrackState.parentState;
+
+      // Clean up current level
+      this.snapshots.delete(this.currentBacktrackState.snapshotId);
+
+      // Restore parent state
+      this.restoreSnapshot(parentState.snapshotId);
+      this.currentBacktrackState = parentState;
+
+      // Try to collapse at this level again
+      if (!this.hasExhaustedAllChoices(parentState)) {
+        return true;  // We can try again at this level
+      }
+
+      // If we've exhausted all choices at this level too, continue up
+    }
+
+    return false;  // No more levels to backtrack to
   }
 }
