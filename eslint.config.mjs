@@ -32,6 +32,20 @@ export default [
 
     rules: {
       "prettier/prettier": "error",
+
+      // 🔹 Ensure `@typescript-eslint/no-unused-vars` is enabled
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          "argsIgnorePattern": "^_",
+          "varsIgnorePattern": "^_",
+          "caughtErrorsIgnorePattern": "^_",
+          "destructuredArrayIgnorePattern": "^_"
+        }
+      ],
+
+      // 🔹 Disable the core `no-unused-vars` rule to avoid conflicts
+      "no-unused-vars": "off",
     },
   },
 ];

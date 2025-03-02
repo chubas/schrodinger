@@ -1,7 +1,6 @@
 import { RandomLib, DefaultRandom } from "./RandomLib.js";
 import { TileDef } from "./TileDef.js";
 import { Grid, Cell, GridSnapshot, SquareGrid } from "./Grid.js";
-import { debugDelta } from "./util.js";
 import { EventEmitter } from "events";
 
 export enum LogLevel {
@@ -106,7 +105,7 @@ export class WFC extends EventEmitter {
 
   initializeGrid() {
     const iterator = this.#grid.iterate();
-    for (const [cell, [x, y]] of iterator) {
+    for (const [_cell, [x, y]] of iterator) {
       // Initialize all tiles with all possible tile definitions
       this.#grid.set([x, y], {
         choices: [...this.tileDefs],
@@ -589,7 +588,7 @@ export class WFC extends EventEmitter {
     }
 
     // Apply all valid changes
-    for (const [key, change] of proposedChanges) {
+    for (const [_key, change] of proposedChanges) {
       const { cell, newChoices, originalChoices } = change;
       cell.choices = newChoices;
 

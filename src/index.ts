@@ -1,9 +1,7 @@
 import { SquareGrid } from "./Grid.js";
-import { WFC, LogLevel, CellCollapse } from "./WFC.js";
+import { WFC, CellCollapse } from "./WFC.js";
 import { TileDef } from "./TileDef.js";
 import { RandomLib } from "./RandomLib.js";
-import { Cell } from "./Grid.js";
-import { debugDelta } from "./util.js";
 import seedrandom from "seedrandom";
 
 class SeedRandom implements RandomLib {
