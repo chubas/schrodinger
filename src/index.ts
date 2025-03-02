@@ -1,5 +1,5 @@
 import { SquareGrid } from "./Grid.js";
-import { DeltaChange, WFC, CellCollapse } from "./WFC.js";
+import { WFC, LogLevel, CellCollapse } from "./WFC.js";
 import { TileDef } from "./TileDef.js";
 import { RandomLib } from "./RandomLib.js";
 import { Cell } from "./Grid.js";
@@ -7,7 +7,7 @@ import { debugDelta } from "./util.js";
 import seedrandom from "seedrandom";
 
 class SeedRandom implements RandomLib {
-  private rng: any;
+  private rng: seedrandom.PRNG;
 
   constructor(seed?: string | number) {
     this.rng = seed === undefined ? seedrandom() : seedrandom(seed as string);
@@ -87,8 +87,8 @@ const grid = new SquareGrid(10, 10);
 // let r = Math.floor(Math.random() * 10000);
 // const r = process.argv[2] || 100;
 // let r = "1"; // This seed fails with an uncollapsable error
-let r = "321"; // requires backtracking
-console.log('Initial seed:', r);
+const r = "321"; // requires backtracking
+console.log("Initial seed:", r);
 
 const random = new SeedRandom(r);
 
@@ -98,7 +98,7 @@ const debugWFC = (clean = false) => {
   // Iterate over all the tiles in the grid, and draw them
   const iterator = wfc.iterate();
   let lastRow = 0;
-  for (const [cell, [x, y]] of iterator) {
+  for (const [cell, [_, y]] of iterator) {
     if (y > lastRow) {
       process.stdout.write("\n");
       lastRow = y;
@@ -116,28 +116,32 @@ const debugWFC = (clean = false) => {
 };
 
 // Set up event listeners
-wfc.on('collapse', (group) => {
-  // debugWFC();
-  console.log('Collapsed:', group.cells.map((c: CellCollapse) => c.coords), ' due to ', group.cause);
+wfc.on("collapse", (group) => {
+  debugWFC();
+  console.log(
+    "\nCollapsed:",
+    group.cells.map((c: CellCollapse) => c.coords),
+    " due to ",
+    group.cause,
+  );
 });
 
-wfc.on('propagate', (cells) => {
-  // console.log('Propagated to:', cells.map((c: Cell) => c.coords));
+wfc.on("propagate", () => {
+  // Propagation events are too verbose, disabled
 });
 
-wfc.on('backtrack', (from) => {
-  // console.log('Backtracking from:', from.cells.map((c: CellCollapse) => c.coords));
-  // console.log('RNG sequence:', rngs.map((n) => n.toFixed(2)).join(","));
+wfc.on("backtrack", () => {
+  // Backtrack events are too verbose, disabled
 });
 
-wfc.on('complete', () => {
-  console.log('\nWFC completed successfully!\n');
+wfc.on("complete", () => {
+  console.log("\nWFC completed successfully!\n");
   debugWFC(true);
-  console.log('\nRNG sequence:', rngs.map((n) => n.toFixed(2)).join(","));
+  console.log("\nRNG sequence:", rngs.map((n) => n.toFixed(2)).join(","));
 });
 
-wfc.on('error', (error) => {
-  console.error('Error during WFC:', error);
+wfc.on("error", (error) => {
+  console.error("Error during WFC:", error);
   debugWFC(true);
   // exit with error code
   process.exit(1);

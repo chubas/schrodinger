@@ -8,8 +8,9 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsup",
-    "format": "prettier --write .",
-    "lint": "eslint .",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "lint": "eslint \"src/**/*.ts\" --max-warnings=0",
+    "lint:fix": "eslint \"src/**/*.ts\" --fix",
     "test": "jest"
   },
   "author": "Rubén Medellín",

@@ -1,5 +1,6 @@
 import { TileDef } from "./TileDef.js";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Cell<Coords = any> = {
   choices: TileDef[];
   collapsed: boolean;
@@ -13,6 +14,7 @@ export type GridSnapshot = {
   height: number;
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface Grid<Coords = any> {
   iterate(): IterableIterator<[Cell<Coords>, Coords]>;
   get(coords: Coords): Cell<Coords> | null;
@@ -34,10 +36,10 @@ export class SquareGrid implements Grid<[number, number]> {
     this.width = width;
     this.height = height;
     if (cells) {
-      this.cells = cells.map(cell => ({
+      this.cells = cells.map((cell) => ({
         ...cell,
         choices: [...cell.choices],
-        forbidden: [...cell.forbidden]
+        forbidden: [...cell.forbidden],
       }));
     } else {
       // Initialize with empty cells
@@ -65,13 +67,13 @@ export class SquareGrid implements Grid<[number, number]> {
 
   toSnapshot(): GridSnapshot {
     return {
-      cells: this.cells.map(cell => ({
+      cells: this.cells.map((cell) => ({
         ...cell,
         choices: [...cell.choices],
-        forbidden: [...cell.forbidden]
+        forbidden: [...cell.forbidden],
       })),
       width: this.width,
-      height: this.height
+      height: this.height,
     };
   }
 

@@ -1,6 +1,6 @@
 export interface RandomLib {
   random(): number;
-  setSeed(seed: number | string): void;
+  setSeed(seed: string | number): void;
 }
 
 export class DefaultRandom implements RandomLib {
@@ -8,7 +8,7 @@ export class DefaultRandom implements RandomLib {
     return Math.random();
   }
 
-  setSeed(seed: number): void {
-    // Do nothing
+  setSeed(_seed: string | number): void {
+    // Default implementation does nothing
   }
 }
