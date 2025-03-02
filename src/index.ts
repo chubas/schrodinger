@@ -83,7 +83,7 @@ const tiledefs: TileDef[] = [
 ];
 
 const rngs: number[] = [];
-const grid = new SquareGrid(3, 3);
+const grid = new SquareGrid(10, 10);
 // let r = Math.floor(Math.random() * 10000);
 // const r = process.argv[2] || 100;
 // let r = "1"; // This seed fails with an uncollapsable error
@@ -92,18 +92,11 @@ console.log('Initial seed:', r);
 
 const random = new SeedRandom(r);
 
-const debugQueue = (queue: DeltaChange<[number, number]>[]) => {
-  console.log("Queue:");
-  for (const delta of queue) {
-    debugDelta(delta);
-  }
-};
-
 const wfc = new WFC(tiledefs, grid, { random });
 
 const debugWFC = (clean = false) => {
   // Iterate over all the tiles in the grid, and draw them
-  const iterator = grid.iterate();
+  const iterator = wfc.iterate();
   let lastRow = 0;
   for (const [cell, [x, y]] of iterator) {
     if (y > lastRow) {
@@ -124,43 +117,28 @@ const debugWFC = (clean = false) => {
 
 // Set up event listeners
 wfc.on('collapse', (group) => {
-  debugWFC();
-  console.log('\nCollapsed:', group.cells.map((c: CellCollapse) => c.coords), ' due to ', group.cause);
+  // debugWFC();
+  console.log('Collapsed:', group.cells.map((c: CellCollapse) => c.coords), ' due to ', group.cause);
 });
 
 wfc.on('propagate', (cells) => {
-  console.log('Propagated to:', cells.map((c: Cell) => c.coords));
+  // console.log('Propagated to:', cells.map((c: Cell) => c.coords));
 });
 
 wfc.on('backtrack', (from) => {
-  console.log('Backtracking from:', from.cells.map((c: CellCollapse) => c.coords));
-  console.log('RNG sequence:', rngs.map((n) => n.toFixed(2)).join(","));
+  // console.log('Backtracking from:', from.cells.map((c: CellCollapse) => c.coords));
+  // console.log('RNG sequence:', rngs.map((n) => n.toFixed(2)).join(","));
 });
 
 wfc.on('complete', () => {
   console.log('\nWFC completed successfully!\n');
   debugWFC(true);
   console.log('\nRNG sequence:', rngs.map((n) => n.toFixed(2)).join(","));
-  // Print manually the grid
-  let str = '';
-  let lastRow = 0;
-  for (const [cell, [x, y]] of grid.iterate()) {
-    console.log(x, y, cell.choices);
-    if (y > lastRow) {
-      str += '\n';
-      lastRow = y;
-    }
-    let value = cell.choices[0]?.name;
-    str += value;
-  }
-  console.log(str);
-
 });
 
 wfc.on('error', (error) => {
   console.error('Error during WFC:', error);
   debugWFC(true);
-  console.log('\nRNG sequence:', rngs.map((n) => n.toFixed(2)).join(","));
   // exit with error code
   process.exit(1);
 });

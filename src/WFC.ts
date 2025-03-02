@@ -4,10 +4,19 @@ import { Grid, Cell, GridSnapshot, SquareGrid } from "./Grid.js";
 import { debugDelta } from "./util.js";
 import { EventEmitter } from "events";
 
+export enum LogLevel {
+  NONE = 0,
+  ERROR = 1,
+  WARN = 2,
+  INFO = 3,
+  DEBUG = 4,
+}
+
 export type WFCOptions = {
   maxRetries?: number;
   backtrackStep?: number;
   random?: RandomLib;
+  logLevel?: LogLevel;
 };
 
 export type CellCollapse = {
@@ -63,39 +72,43 @@ type BacktrackState = {
 };
 
 export class WFC extends EventEmitter {
-  private tileDefs: TileDef[];
-  private options: Required<WFCOptions>;
-  private retries: number;
-  private grid: Grid;
-  private rng: RandomLib;
-  private deltaStack: DeltaChange<[number, number]>[];
-  private collapseQueue: CollapseGroup[] = [];
-  private propagationQueue: Set<Cell> = new Set();
-  private snapshots: Map<number, GridSnapshot> = new Map();
+  private readonly tileDefs: TileDef[];
+  private readonly options: WFCOptions;
+  private readonly retries: number;
+  #grid: Grid;  // Using private # field for true privacy
+  private readonly rng: RandomLib;
+  private readonly deltaStack: DeltaChange<[number, number]>[];
+  private readonly collapseQueue: CollapseGroup[] = [];
+  private readonly propagationQueue: Set<Cell> = new Set();
+  private readonly snapshots: Map<number, GridSnapshot> = new Map();
   private snapshotCounter: number = 0;
   private currentBacktrackState?: BacktrackState;
-  private readonly MAX_ATTEMPTS_PER_LEVEL = 10;  // Configurable
+  private readonly MAX_ATTEMPTS_PER_LEVEL = 10;
+  private readonly logLevel: LogLevel;
 
   constructor(tileDefs: TileDef[], grid: Grid, options: WFCOptions = {}) {
     super();
     this.tileDefs = tileDefs;
-    this.grid = grid;
+    this.#grid = grid;
     this.initializeGrid();
+    const random = options.random ?? new DefaultRandom();
     this.options = {
       maxRetries: options.maxRetries ?? 100,
       backtrackStep: options.backtrackStep ?? 1,
-      random: options.random ?? new DefaultRandom(),
+      random,
+      logLevel: options.logLevel ?? LogLevel.ERROR
     };
-    this.rng = this.options.random;
+    this.rng = random;
     this.retries = 0;
     this.deltaStack = [];
+    this.logLevel = this.options.logLevel ?? LogLevel.ERROR;
   }
 
   initializeGrid() {
-    const iterator = this.grid.iterate();
+    const iterator = this.#grid.iterate();
     for (const [cells, [x, y]] of iterator) {
       // Initialize all tiles with all possible tile definitions
-      this.grid.set([x, y], {
+      this.#grid.set([x, y], {
         choices: [...this.tileDefs],
         collapsed: false,
         forbidden: [],
@@ -110,7 +123,7 @@ export class WFC extends EventEmitter {
 
   get completed(): boolean {
     // Return true if all cells have been collapsed, that is, they only have one possible tile definition
-    const iterator = this.grid.iterate();
+    const iterator = this.#grid.iterate();
     for (const [cell, _] of iterator) {
       if (!cell.collapsed) {
         return false;
@@ -128,7 +141,7 @@ export class WFC extends EventEmitter {
         });
       } else {
         // Start with lowest entropy cell
-        const uncollapsed = this.grid.getCells().filter(cell => !cell.collapsed);
+        const uncollapsed = this.#grid.getCells().filter(cell => !cell.collapsed);
         if (uncollapsed.length === 0) {
           this.emit('complete');
           return;
@@ -169,9 +182,9 @@ export class WFC extends EventEmitter {
         const success = this.attemptCollapseWithRetries(backtrackState);
         if (!success) {
           // If we couldn't collapse even with retries, we need to go back further
-          console.log('Failed to collapse with current state, attempting multi-level backtrack');
-          console.log('Current state:', this.currentBacktrackState?.group.cells.map(c => c.coords));
-          console.log('Has parent:', !!this.currentBacktrackState?.parentState);
+          this.log(LogLevel.INFO, 'Failed to collapse with current state, attempting multi-level backtrack');
+          this.log(LogLevel.DEBUG, 'Current state:', this.currentBacktrackState?.group.cells.map(c => c.coords));
+          this.log(LogLevel.DEBUG, 'Has parent:', !!this.currentBacktrackState?.parentState);
           if (!this.handleMultiLevelBacktrack()) {
             throw new Error("Pattern is uncollapsable - no valid solutions found");
           }
@@ -184,7 +197,7 @@ export class WFC extends EventEmitter {
 
         // If queue is empty but we still have uncollapsed cells, add lowest entropy
         if (this.collapseQueue.length === 0 && !this.completed) {
-          const uncollapsed = this.grid.getCells().filter(cell => !cell.collapsed);
+          const uncollapsed = this.#grid.getCells().filter(cell => !cell.collapsed);
           if (uncollapsed.length > 0) {
             const lowestEntropy = this.getLowestEntropyTile(uncollapsed);
             this.collapseQueue.push({
@@ -244,12 +257,12 @@ export class WFC extends EventEmitter {
 
       // Check if we've exhausted all possibilities for this group
       if (this.hasExhaustedAllChoices(state)) {
-        console.log('Exhausted all choices for group:', state.group.cells.map(c => c.coords));
+        this.log(LogLevel.INFO, 'Exhausted all choices for group:', state.group.cells.map(c => c.coords));
         return false;  // This will trigger multi-level backtrack in processCollapseQueue
       }
     }
 
-    console.log('Exceeded max attempts:', maxAttempts, 'for group:', state.group.cells.map(c => c.coords));
+    this.log(LogLevel.INFO, 'Exceeded max attempts:', maxAttempts, 'for group:', state.group.cells.map(c => c.coords));
     return false;  // Exceeded max attempts
   }
 
@@ -260,7 +273,7 @@ export class WFC extends EventEmitter {
     const selectedValues = new Map<string, TileDef>();
 
     for (const cellCollapse of group.cells) {
-      const cell = this.grid.get(cellCollapse.coords);
+      const cell = this.#grid.get(cellCollapse.coords);
       if (!cell) continue;
 
       const coordKey = `${cellCollapse.coords[0]},${cellCollapse.coords[1]}`;
@@ -268,12 +281,12 @@ export class WFC extends EventEmitter {
 
       // Filter out already tried values - use cell.choices from current state
       const availableChoices = cell.choices.filter(choice => !tried.has(choice));
-      console.log('Available choices for', cell.coords, ':', availableChoices.map(c => c.name),
+      this.log(LogLevel.DEBUG, 'Available choices for', cell.coords, ':', availableChoices.map(c => c.name),
                  'after excluding tried:', Array.from(tried).map(c => c.name),
                  'from total choices:', cell.choices.map(c => c.name));
 
       if (availableChoices.length === 0) {
-        console.log('No more available choices for cell:', cell.coords);
+        this.log(LogLevel.INFO, 'No more available choices for cell:', cell.coords);
         return { success: false, affectedCells: [] };
       }
 
@@ -287,7 +300,7 @@ export class WFC extends EventEmitter {
       }
       triedValues.get(coordKey)!.add(value);
 
-      console.log('Trying:', value.name, 'for cell', cell.coords,
+      this.log(LogLevel.DEBUG, 'Trying:', value.name, 'for cell', cell.coords,
                  '(attempt', state.attempts + 1, 'of', state.group.maxAttempts ?? this.MAX_ATTEMPTS_PER_LEVEL, ')',
                  'remaining untried:', availableChoices.filter(c => !tried.has(c)).map(c => c.name));
     }
@@ -302,13 +315,13 @@ export class WFC extends EventEmitter {
 
     // First pass: collapse all cells in the group
     for (const cellCollapse of group.cells) {
-      const cell = this.grid.get(cellCollapse.coords);
+      const cell = this.#grid.get(cellCollapse.coords);
       if (!cell) continue;
 
       const coordKey = `${cellCollapse.coords[0]},${cellCollapse.coords[1]}`;
       const value = selectedValues.get(coordKey)!;
 
-      console.log('Collapsing cell', cell.coords, 'to', value.name,
+      this.log(LogLevel.DEBUG, 'Collapsing cell', cell.coords, 'to', value.name,
                  'from choices:', cell.choices.map(c => c.name));
 
       cell.collapsed = true;
@@ -329,7 +342,7 @@ export class WFC extends EventEmitter {
 
       this.propagationQueue.delete(currentCell);
       const originalChoices = [...currentCell.choices];
-      const neighbors = this.grid.getNeighbors(currentCell.coords);
+      const neighbors = this.#grid.getNeighbors(currentCell.coords);
 
       // Update choices based on all neighbors
       for (let i = 0; i < neighbors.length; i++) {
@@ -345,7 +358,7 @@ export class WFC extends EventEmitter {
 
         // Log which choices were removed
         const removedChoices = originalChoices.filter(c => !currentCell.choices.includes(c));
-        console.log('Removed choices:', removedChoices.map(c => c.name), 'for cell', currentCell.coords, ' remain: ', currentCell.choices.map(c => c.name));
+        this.log(LogLevel.DEBUG, 'Removed choices:', removedChoices.map(c => c.name), 'for cell', currentCell.coords, ' remain: ', currentCell.choices.map(c => c.name));
 
         affectedCells.push(currentCell);
 
@@ -378,7 +391,7 @@ export class WFC extends EventEmitter {
   }
 
   private queueNeighborsForPropagation(cell: Cell): void {
-    const neighbors = this.grid.getNeighbors(cell.coords);
+    const neighbors = this.#grid.getNeighbors(cell.coords);
     for (const neighbor of neighbors) {
       if (neighbor && !neighbor.collapsed) {
         this.propagationQueue.add(neighbor);
@@ -387,10 +400,10 @@ export class WFC extends EventEmitter {
   }
 
   private takeSnapshot(): number {
-    const snapshot = this.grid.toSnapshot();
+    const snapshot = this.#grid.toSnapshot();
     const id = this.snapshotCounter++;
     this.snapshots.set(id, snapshot);
-    console.log('Taking snapshot', id, 'Current grid state:');
+    this.log(LogLevel.DEBUG, 'Taking snapshot', id, 'Current grid state:');
     this.debugGridState();
     return id;
   }
@@ -400,17 +413,17 @@ export class WFC extends EventEmitter {
     if (!snapshot) {
       throw new Error(`Snapshot ${id} not found`);
     }
-    console.log('Restoring snapshot', id, 'Previous grid state:');
+    this.log(LogLevel.DEBUG, 'Restoring snapshot', id, 'Previous grid state:');
     this.debugGridState();
-    this.grid = SquareGrid.fromSnapshot(snapshot);
-    console.log('After restore:');
+    this.#grid = SquareGrid.fromSnapshot(snapshot);
+    this.log(LogLevel.DEBUG, 'After restore:');
     this.debugGridState();
   }
 
   private debugGridState() {
-    const iterator = this.grid.iterate();
+    const iterator = this.#grid.iterate();
     for (const [cell, coords] of iterator) {
-      console.log(`[${coords}]: ${cell.choices.map(c => c.name).join(',')}`);
+      this.log(LogLevel.DEBUG, `[${coords}]: ${cell.choices.map(c => c.name).join(',')}`);
     }
   }
 
@@ -451,7 +464,7 @@ export class WFC extends EventEmitter {
       if (processedCells.has(cellKey)) continue;
       processedCells.add(cellKey);
 
-      const neighbors = this.grid.getNeighbors(currentCell.coords);
+      const neighbors = this.#grid.getNeighbors(currentCell.coords);
       for (let i = 0; i < neighbors.length; i++) {
         const neighbor = neighbors[i];
         if (!neighbor || neighbor.collapsed) continue;
@@ -472,7 +485,7 @@ export class WFC extends EventEmitter {
         }
       }
     }
-    console.log('Proposed changes:', proposedChanges);
+    this.log(LogLevel.DEBUG, 'Proposed changes:', proposedChanges);
 
     // Phase 2: Validate and apply changes
     const invalidChanges = this.validateProposedChanges(proposedChanges);
@@ -520,7 +533,7 @@ export class WFC extends EventEmitter {
       }
 
       // Check if changes would create conflicts with neighbors
-      const neighbors = this.grid.getNeighbors(cell.coords);
+      const neighbors = this.#grid.getNeighbors(cell.coords);
       for (let i = 0; i < neighbors.length; i++) {
         const neighbor = neighbors[i];
         if (!neighbor) continue;
@@ -535,7 +548,7 @@ export class WFC extends EventEmitter {
         for (const option of newChoices) {
           for (const neighborOption of neighborChoices) {
             const d1 = option.adjacencies[i];
-            const d2 = neighborOption.adjacencies[this.grid.adjacencyMap[i]];
+            const d2 = neighborOption.adjacencies[this.#grid.adjacencyMap[i]];
             if (d1 === d2) {
               hasValidAdjacency = true;
               break;
@@ -565,7 +578,7 @@ export class WFC extends EventEmitter {
       for (const adjacentOption of neighbor.choices) {
         const d1 = option.adjacencies[direction];
         const d2 =
-          adjacentOption.adjacencies[this.grid.adjacencyMap[direction]];
+          adjacentOption.adjacencies[this.#grid.adjacencyMap[direction]];
         if (d1 === d2) {
           valid.push(option);
           break;
@@ -582,7 +595,7 @@ export class WFC extends EventEmitter {
     // collapsedCell.choices = [...discardedValues[0].tiles];
     collapsedCell.forbidden.push(pickedValue);
     for (const { coords, tiles, collapsed } of discardedValues) {
-      const cell = this.grid.get(coords);
+      const cell = this.#grid.get(coords);
       if (cell) {
         // Add back the removed tiles
         // console.log('Adding back:', tiles.map(t => t.name), 'to', cell.coords, cell.choices.map(t => t.name));
@@ -598,7 +611,7 @@ export class WFC extends EventEmitter {
     const { group, triedValues } = state;
 
     for (const cellCollapse of group.cells) {
-      const cell = this.grid.get(cellCollapse.coords);
+      const cell = this.#grid.get(cellCollapse.coords);
       if (!cell) continue;
 
       const coordKey = `${cellCollapse.coords[0]},${cellCollapse.coords[1]}`;
@@ -615,7 +628,7 @@ export class WFC extends EventEmitter {
 
   private handleMultiLevelBacktrack(): boolean {
     while (this.currentBacktrackState?.parentState) {
-      console.log('Attempting to backtrack to parent state from:',
+      this.log(LogLevel.DEBUG, 'Attempting to backtrack to parent state from:',
                  this.currentBacktrackState.group.cells.map(c => c.coords));
 
       // Clean up current level
@@ -623,9 +636,9 @@ export class WFC extends EventEmitter {
 
       // Go up one level
       const parentState = this.currentBacktrackState.parentState;
-      console.log('Parent state:', parentState.group.cells.map(c => c.coords));
-      console.log('Parent was successful:', parentState.wasSuccessful);
-      console.log('Parent has untried choices:', !this.hasExhaustedAllChoices(parentState));
+      this.log(LogLevel.DEBUG, 'Parent state:', parentState.group.cells.map(c => c.coords));
+      this.log(LogLevel.DEBUG, 'Parent was successful:', parentState.wasSuccessful);
+      this.log(LogLevel.DEBUG, 'Parent has untried choices:', !this.hasExhaustedAllChoices(parentState));
 
       // Restore parent state
       this.restoreSnapshot(parentState.snapshotId);
@@ -634,7 +647,7 @@ export class WFC extends EventEmitter {
       // Try to collapse at this level again if it was previously successful
       // and still has untried choices
       if (parentState.wasSuccessful && !this.hasExhaustedAllChoices(parentState)) {
-        console.log('Found valid parent state to backtrack to:',
+        this.log(LogLevel.INFO, 'Found valid parent state to backtrack to:',
                    parentState.group.cells.map(c => c.coords));
 
         // Add this group back to the queue to retry with new values
@@ -645,9 +658,21 @@ export class WFC extends EventEmitter {
         return true;
       }
 
-      console.log('Parent state exhausted or was not successful, continuing up...');
+      this.log(LogLevel.DEBUG, 'Parent state exhausted or was not successful, continuing up...');
     }
 
     return false;  // No more levels to backtrack to
+  }
+
+  // Public method to safely iterate over the current grid state
+  iterate(): IterableIterator<[Cell, [number, number]]> {
+    return this.#grid.iterate();
+  }
+
+  private log(level: LogLevel, ...args: any[]) {
+    if (level <= this.logLevel) {
+      const prefix = LogLevel[level].padEnd(5);
+      console.log(`[${prefix}]`, ...args);
+    }
   }
 }
