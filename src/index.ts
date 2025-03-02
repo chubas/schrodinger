@@ -138,9 +138,23 @@ wfc.on('backtrack', (from) => {
 });
 
 wfc.on('complete', () => {
-  console.log('\nWFC completed successfully!');
+  console.log('\nWFC completed successfully!\n');
   debugWFC(true);
   console.log('\nRNG sequence:', rngs.map((n) => n.toFixed(2)).join(","));
+  // Print manually the grid
+  let str = '';
+  let lastRow = 0;
+  for (const [cell, [x, y]] of grid.iterate()) {
+    console.log(x, y, cell.choices);
+    if (y > lastRow) {
+      str += '\n';
+      lastRow = y;
+    }
+    let value = cell.choices[0]?.name;
+    str += value;
+  }
+  console.log(str);
+
 });
 
 wfc.on('error', (error) => {
@@ -153,6 +167,3 @@ wfc.on('error', (error) => {
 
 // Start the WFC process
 wfc.start();
-
-// Remove the old while loop since the process is now event-driven
-// ... rest of the existing code ...

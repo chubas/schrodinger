@@ -7,12 +7,20 @@ export type Cell<Coords = any> = {
   coords: Coords;
 };
 
+export type GridSnapshot = {
+  cells: Cell[];
+  width: number;
+  height: number;
+};
+
 export interface Grid<Coords = any> {
   iterate(): IterableIterator<[Cell<Coords>, Coords]>;
   get(coords: Coords): Cell<Coords> | null;
   set(coords: Coords, cell: Cell<Coords>): void;
   getNeighbors(coords: Coords): (Cell<Coords> | null)[];
   getCells(): Cell<Coords>[];
+  clone(): Grid<Coords>;
+  toSnapshot(): GridSnapshot;
   // Adjacency map is an array, where for each cell in the TileDef grid, its index indicates the index of the neighbor it matches
   adjacencyMap: number[];
 }
@@ -22,21 +30,49 @@ export class SquareGrid implements Grid<[number, number]> {
   private width: number;
   private height: number;
 
-  constructor(width: number, height: number) {
-    // Initialize the grid with empty cells
+  constructor(width: number, height: number, cells?: Cell[]) {
     this.width = width;
     this.height = height;
-    this.cells = [];
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        this.cells.push({
-          choices: [],
-          collapsed: false,
-          forbidden: [],
-          coords: [x, y],
-        });
+    if (cells) {
+      this.cells = cells.map(cell => ({
+        ...cell,
+        choices: [...cell.choices],
+        forbidden: [...cell.forbidden]
+      }));
+    } else {
+      // Initialize with empty cells
+      this.cells = [];
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          this.cells.push({
+            choices: [],
+            collapsed: false,
+            forbidden: [],
+            coords: [x, y],
+          });
+        }
       }
     }
+  }
+
+  static fromSnapshot(snapshot: GridSnapshot): SquareGrid {
+    return new SquareGrid(snapshot.width, snapshot.height, snapshot.cells);
+  }
+
+  clone(): Grid<[number, number]> {
+    return new SquareGrid(this.width, this.height, this.cells);
+  }
+
+  toSnapshot(): GridSnapshot {
+    return {
+      cells: this.cells.map(cell => ({
+        ...cell,
+        choices: [...cell.choices],
+        forbidden: [...cell.forbidden]
+      })),
+      width: this.width,
+      height: this.height
+    };
   }
 
   *iterate(): IterableIterator<[Cell, [number, number]]> {
