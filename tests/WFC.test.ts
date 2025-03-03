@@ -1,5 +1,5 @@
 import { WFC } from "../src/WFC";
-import { SquareGrid } from "../src/Grid";
+import { SquareGrid, Cell } from "../src/Grid";
 import { TileDef } from "../src/TileDef";
 import { RandomLib } from "../src/RandomLib";
 
@@ -72,42 +72,109 @@ describe("WFC", () => {
   });
 
   describe("RNG Integration", () => {
-    it("should always pick first tile with zero-returning RNG", () => {
+    it("should always pick first tile with zero-returning RNG", async () => {
       const grid = new SquareGrid(2, 2);
       const zeroRNG = new DeterministicRNG([0]);
       const wfc = new WFC(mockTiles, grid, { random: zeroRNG });
 
-      // Start WFC and capture the first collapse
-      let firstCollapse: any;
-      wfc.on("collapse", (group) => {
-        if (!firstCollapse) {
-          firstCollapse = group;
-        }
+      await new Promise<void>((resolve) => {
+        wfc.on("collapse", (group) => {
+          // Since RNG always returns 0, it should always pick the first tile
+          expect(group.cells[0].value?.name).toBe(mockTiles[0].name);
+          resolve();
+        });
+
+        wfc.start();
       });
-
-      wfc.start();
-
-      // Since RNG always returns 0, it should always pick the first tile
-      expect(firstCollapse.cells[0].value?.name).toBe(mockTiles[0].name);
     });
 
-    it("should use provided RNG sequence", () => {
+    it("should use provided RNG sequence", async () => {
       const grid = new SquareGrid(2, 2);
       const sequence = [0.5, 0.2, 0.8]; // Will pick different tiles based on these values
       const sequenceRNG = new DeterministicRNG(sequence);
       const wfc = new WFC(mockTiles, grid, { random: sequenceRNG });
 
       const collapses: any[] = [];
-      wfc.on("collapse", (group) => {
-        collapses.push(group);
+
+      await new Promise<void>((resolve) => {
+        wfc.on("collapse", (group) => {
+          collapses.push(group);
+        });
+
+        wfc.on("complete", () => {
+          // Verify that different tiles were picked based on the RNG sequence
+          expect(collapses.length).toBeGreaterThan(0);
+          expect(collapses.some(c => c.cells[0].value?.name === "B" || c.cells[0].value?.name === "C")).toBe(true);
+          resolve();
+        });
+
+        wfc.start();
       });
+    });
+  });
 
-      wfc.start();
+  describe("Forced Chain Propagation", () => {
+    it("should propagate forced choices in a linear grid", async () => {
+      // Create tiles that can only connect horizontally
+      const horizontalTiles: TileDef[] = [
+        {
+          name: "horizontal",
+          adjacencies: ["h", "x", "h", "x"], // Can only connect horizontally
+          draw: () => {},
+        },
+        {
+          name: "vertical",
+          adjacencies: ["x", "v", "x", "v"], // Can only connect vertically
+          draw: () => {},
+        },
+      ];
 
-      // Verify that different tiles were picked based on the RNG sequence
-      expect(collapses.length).toBeGreaterThan(0);
-      // The actual tiles picked will depend on the RNG values and available choices
-      expect(collapses.some(c => c.cells[0].value?.name === "B" || c.cells[0].value?.name === "C")).toBe(true);
+      // Create a 1x4 grid - forcing horizontal propagation
+      const grid = new SquareGrid(4, 1);
+      const wfc = new WFC(horizontalTiles, grid);
+
+      let collapseCount = 0;
+      let propagateCount = 0;
+
+      await new Promise<void>((resolve) => {
+        wfc.on("collapse", (group) => {
+          collapseCount++;
+          // First collapse should be the seed
+          if (collapseCount === 1) {
+            expect(group.cause).toBe("entropy");
+            expect(group.cells[0].value?.name).toBe("horizontal");
+          }
+        });
+
+        wfc.on("propagate", (cells) => {
+          propagateCount++;
+          // All cells should be forced to horizontal
+          cells.forEach((cell:Cell) => {
+            if (cell.collapsed) {
+              expect(cell.choices[0].name).toBe("horizontal");
+            }
+          });
+        });
+
+        wfc.on("complete", () => {
+          // Should only have one explicit collapse, rest should be forced
+          expect(collapseCount).toBe(1);
+          expect(propagateCount).toBeGreaterThan(0);
+
+          // Verify final state
+          for (const [cell] of grid.iterate()) {
+            expect(cell.collapsed).toBe(true);
+            expect(cell.choices[0].name).toBe("horizontal");
+          }
+          resolve();
+        });
+
+        // Start with horizontal tile at first position
+        wfc.start([{
+          coords: [0, 0],
+          value: horizontalTiles[0]
+        }]);
+      });
     });
   });
 });

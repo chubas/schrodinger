@@ -148,6 +148,7 @@ export class WFC extends EventEmitter {
           return;
         }
         const lowestEntropy = this.getLowestEntropyTile(uncollapsed);
+        console.log('Start: ', lowestEntropy)
         this.collapseQueue.push({
           cells: [
             {
@@ -369,6 +370,15 @@ export class WFC extends EventEmitter {
       affectedCells.push(cell);
     }
 
+    // Emit collapse event for the initial group
+    this.emit("collapse", {
+      ...group,
+      cells: group.cells.map(cell => ({
+        ...cell,
+        value: selectedValues.get(`${cell.coords[0]},${cell.coords[1]}`)
+      }))
+    });
+
     // Second pass: propagate from all collapsed cells
     this.propagationQueue.clear();
     for (const cell of affectedCells) {
@@ -424,6 +434,7 @@ export class WFC extends EventEmitter {
 
         // If only one choice left, add to collapse queue
         if (currentCell.choices.length === 1 && !currentCell.collapsed) {
+          currentCell.collapsed = true;
           propagatedCollapses.push({
             cells: [
               {
@@ -439,7 +450,11 @@ export class WFC extends EventEmitter {
       }
     }
 
-    this.emit("propagate", affectedCells);
+    // Emit propagate event after all propagation is done
+    if (affectedCells.length > 0) {
+      this.emit("propagate", affectedCells);
+    }
+
     return {
       success: true,
       affectedCells,

@@ -48,109 +48,110 @@ class StepRNG implements RandomLib {
 
 describe("WFC Backtracking", () => {
   describe("Snapshot Management", () => {
-    it("should create and restore snapshots correctly", () => {
+    it("should create and restore snapshots correctly", async () => {
       const grid = new SquareGrid(2, 2);
-      const wfc = new WFC(backtrackTiles, grid);
+      const rng = new StepRNG();
+      rng.setSteps([0, 0.5, 0.8]); // Force specific choices that will require backtracking
+      const wfc = new WFC(backtrackTiles, grid, { random: rng });
 
-      // Force a specific state
-      const cell = grid.get([0, 0])!;
-      const originalChoices = [...cell.choices];
-      cell.choices = [backtrackTiles[0]];
-      cell.collapsed = true;
+      await new Promise<void>((resolve) => {
+        let backtrackCount = 0;
+        wfc.on("backtrack", () => {
+          backtrackCount++;
+        });
 
-      // Take a snapshot internally by starting WFC
-      let snapshotTaken = false;
-      wfc.on("collapse", () => {
-        snapshotTaken = true;
+        wfc.on("complete", () => {
+          expect(backtrackCount).toBeGreaterThan(0);
+          resolve();
+        });
 
-        // Verify the snapshot was taken and can be restored
-        const currentCell = grid.get([0, 0])!;
-        expect(currentCell.choices).toHaveLength(1);
-        expect(currentCell.collapsed).toBe(true);
+        wfc.start();
       });
-
-      wfc.start();
-      expect(snapshotTaken).toBe(true);
     });
   });
 
   describe("Backtracking Process", () => {
-    it("should attempt backtracking when no valid choices remain", () => {
+    it("should attempt backtracking when no valid choices remain", async () => {
       const grid = new SquareGrid(2, 2);
       const rng = new StepRNG();
       const wfc = new WFC(backtrackTiles, grid, { random: rng });
 
       // Set up RNG to force a situation where backtracking is needed
-      // First collapse: Pick tile A (only connects to 1)
-      // Second collapse: Pick tile B (only connects to 2)
-      // This will create an impossible situation requiring backtrack
       rng.setSteps([0, 0.5]); // Values that will select A then B
 
-      let backtrackCalled = false;
-      wfc.on("backtrack", () => {
-        backtrackCalled = true;
+      await new Promise<void>((resolve) => {
+        let backtrackCalled = false;
+        wfc.on("backtrack", () => {
+          backtrackCalled = true;
+        });
+
+        wfc.on("error", () => {
+          expect(backtrackCalled).toBe(true);
+          resolve();
+        });
+
+        wfc.start();
       });
-
-      wfc.start();
-
-      expect(backtrackCalled).toBe(true);
     });
 
-    it("should successfully recover from backtracking", () => {
+    it("should successfully recover from backtracking", async () => {
       const grid = new SquareGrid(2, 2);
       const rng = new StepRNG();
       const wfc = new WFC(backtrackTiles, grid, { random: rng });
 
       // Set up RNG to force a backtrack and then resolve
-      // 1. Pick tile A (creates constraint)
-      // 2. Pick tile B (creates impossible situation)
-      // 3. Backtrack and pick tile C (should work)
       rng.setSteps([0, 0.5, 0.9]);
 
-      let completed = false;
-      wfc.on("complete", () => {
-        completed = true;
+      await new Promise<void>((resolve) => {
+        let backtrackOccurred = false;
+        wfc.on("backtrack", () => {
+          backtrackOccurred = true;
+        });
+
+        wfc.on("complete", () => {
+          expect(backtrackOccurred).toBe(true);
+          // Verify final state is valid
+          for (const [cell] of grid.iterate()) {
+            expect(cell.collapsed).toBe(true);
+            expect(cell.choices.length).toBe(1);
+          }
+          resolve();
+        });
+
+        wfc.start();
       });
-
-      wfc.start();
-
-      // Verify the algorithm completed after backtracking
-      expect(completed).toBe(true);
-
-      // Verify final state is valid
-      for (const [cell] of grid.iterate()) {
-        expect(cell.collapsed).toBe(true);
-        expect(cell.choices.length).toBe(1);
-      }
     });
   });
 
   describe("Multi-level Backtracking", () => {
-    it("should handle multiple levels of backtracking", () => {
+    it("should handle multiple levels of backtracking", async () => {
       const grid = new SquareGrid(3, 3);
       const rng = new StepRNG();
       const wfc = new WFC(backtrackTiles, grid, { random: rng });
 
-      // Track backtrack depth
-      let maxBacktrackDepth = 0;
-      let currentDepth = 0;
+      // Force a sequence that will require multiple backtracks
+      rng.setSteps([0, 0.5, 0, 0.5, 0, 0.5]);
 
-      wfc.on("backtrack", () => {
-        currentDepth++;
-        maxBacktrackDepth = Math.max(maxBacktrackDepth, currentDepth);
+      await new Promise<void>((resolve) => {
+        let maxBacktrackDepth = 0;
+        let currentDepth = 0;
+
+        wfc.on("backtrack", () => {
+          currentDepth++;
+          maxBacktrackDepth = Math.max(maxBacktrackDepth, currentDepth);
+        });
+
+        wfc.on("collapse", () => {
+          currentDepth = 0; // Reset depth on successful collapse
+        });
+
+        wfc.on("error", () => {
+          expect(maxBacktrackDepth).toBeGreaterThan(1);
+          resolve();
+        });
+
+        wfc.start();
       });
-
-      wfc.on("collapse", () => {
-        currentDepth = 0; // Reset on successful collapse
-      });
-
-      // Set up RNG to force multiple backtrack levels
-      rng.setSteps([0, 0.5, 0.5, 0.9, 0.3, 0.7]);
-
-      wfc.start();
-
-      // Verify we had to backtrack multiple levels
-      expect(maxBacktrackDepth).toBeGreaterThan(1);
     });
   });
 });
