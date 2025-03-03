@@ -250,52 +250,25 @@ export class WFC extends EventEmitter {
       // Restore state before each attempt (except first)
       if (state.attempts > 0) {
         this.restoreSnapshot(state.snapshotId);
-      }
-
-      const result = this.collapseGroupWithTracking(state);
-      if (result.success) {
-        this.emit("collapse", state.group);
-        // Add any new collapses from propagation to the queue
-        if (result.propagatedCollapses) {
-          this.collapseQueue.push(...result.propagatedCollapses);
-        }
-        return true;
+        // Emit backtrack event when we retry
+        this.emit("backtrack", state.group);
       }
 
       state.attempts++;
-      this.emit("backtrack", {
-        ...state.group,
-        // Add debug info about tried values
-        debug: {
-          attempts: state.attempts,
-          triedValues: Array.from(state.triedValues.entries()).map(
-            ([coords, values]) => ({
-              coords,
-              values: Array.from(values).map((v) => v.name),
-            }),
-          ),
-        },
-      });
 
-      // Check if we've exhausted all possibilities for this group
-      if (this.hasExhaustedAllChoices(state)) {
-        this.log(
-          LogLevel.INFO,
-          "Exhausted all choices for group:",
-          state.group.cells.map((c) => c.coords),
-        );
-        return false; // This will trigger multi-level backtrack in processCollapseQueue
+      const result = this.collapseGroupWithTracking(state);
+      if (result.success) {
+        return true;
       }
+
+      // If we failed but have more attempts, continue to next iteration
+      this.log(
+        LogLevel.DEBUG,
+        `Attempt ${state.attempts}/${maxAttempts} failed, will retry if attempts remain`
+      );
     }
 
-    this.log(
-      LogLevel.INFO,
-      "Exceeded max attempts:",
-      maxAttempts,
-      "for group:",
-      state.group.cells.map((c) => c.coords),
-    );
-    return false; // Exceeded max attempts
+    return false;
   }
 
   private collapseGroupWithTracking(state: BacktrackState): CollapseResult {
@@ -718,65 +691,33 @@ export class WFC extends EventEmitter {
   }
 
   private handleMultiLevelBacktrack(): boolean {
-    while (this.currentBacktrackState?.parentState) {
-      this.log(
-        LogLevel.DEBUG,
-        "Attempting to backtrack to parent state from:",
-        this.currentBacktrackState.group.cells.map((c) => c.coords),
-      );
+    let currentState = this.currentBacktrackState;
+    let backtrackDepth = 0;
 
-      // Clean up current level
-      this.snapshots.delete(this.currentBacktrackState.snapshotId);
+    while (currentState) {
+      backtrackDepth++;
 
-      // Go up one level
-      const parentState = this.currentBacktrackState.parentState;
-      this.log(
-        LogLevel.DEBUG,
-        "Parent state:",
-        parentState.group.cells.map((c) => c.coords),
-      );
-      this.log(
-        LogLevel.DEBUG,
-        "Parent was successful:",
-        parentState.wasSuccessful,
-      );
-      this.log(
-        LogLevel.DEBUG,
-        "Parent has untried choices:",
-        !this.hasExhaustedAllChoices(parentState),
-      );
-
-      // Restore parent state
-      this.restoreSnapshot(parentState.snapshotId);
-      this.currentBacktrackState = parentState;
-
-      // Try to collapse at this level again if it was previously successful
-      // and still has untried choices
-      if (
-        parentState.wasSuccessful &&
-        !this.hasExhaustedAllChoices(parentState)
-      ) {
+      // Try to find a previous state that still has untried possibilities
+      if (!this.hasExhaustedAllChoices(currentState)) {
         this.log(
           LogLevel.INFO,
-          "Found valid parent state to backtrack to:",
-          parentState.group.cells.map((c) => c.coords),
+          `Found valid backtrack state at depth ${backtrackDepth}`
         );
 
-        // Add this group back to the queue to retry with new values
-        this.collapseQueue.unshift({
-          ...parentState.group,
-          maxAttempts: this.MAX_ATTEMPTS_PER_LEVEL - parentState.attempts,
-        });
-        return true;
+        // Restore to this state and try again
+        this.restoreSnapshot(currentState.snapshotId);
+        this.emit("backtrack", currentState.group);
+
+        // Attempt to collapse with new choices
+        if (this.attemptCollapseWithRetries(currentState)) {
+          return true;
+        }
       }
 
-      this.log(
-        LogLevel.DEBUG,
-        "Parent state exhausted or was not successful, continuing up...",
-      );
+      currentState = currentState.parentState;
     }
 
-    return false; // No more levels to backtrack to
+    return false;
   }
 
   // Public method to safely iterate over the current grid state
