@@ -139,9 +139,9 @@ describe("WFC", () => {
       await new Promise<void>((resolve) => {
         wfc.on("collapse", (group) => {
           collapseCount++;
-          // First collapse should be the seed
+          // First collapse should be from initial seed
           if (collapseCount === 1) {
-            expect(group.cause).toBe("entropy");
+            expect(group.cause).toBe("initial");
             expect(group.cells[0].value?.name).toBe("horizontal");
           }
         });
@@ -149,7 +149,7 @@ describe("WFC", () => {
         wfc.on("propagate", (cells) => {
           propagateCount++;
           // All cells should be forced to horizontal
-          cells.forEach((cell:Cell) => {
+          cells.forEach((cell: Cell) => {
             if (cell.collapsed) {
               expect(cell.choices[0].name).toBe("horizontal");
             }

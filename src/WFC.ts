@@ -115,9 +115,11 @@ export class WFC extends EventEmitter {
       });
     }
   }
-  // Utility function: pick
+  // Utility function: p
   pick<T>(array: T[]): T {
-    return array[Math.floor(this.rng.random() * array.length)];
+    let r = this.rng.random();
+    let i = Math.floor(r * array.length);
+    return array[i];
   }
 
   get completed(): boolean {
@@ -134,10 +136,53 @@ export class WFC extends EventEmitter {
   start(initialSeed?: CellCollapse[]): void {
     try {
       if (initialSeed && initialSeed.length > 0) {
-        this.collapseQueue.push({
-          cells: initialSeed,
-          cause: "initial",
-        });
+        // Create a snapshot before applying the seed
+        const snapshotId = this.takeSnapshot();
+
+        // Apply the seed and check for forced collapses
+        const result = this.collapseGroupWithValues(
+          { cells: initialSeed, cause: "initial" },
+          new Map(initialSeed.map(cell => [
+            `${cell.coords[0]},${cell.coords[1]}`,
+            cell.value!
+          ]))
+        );
+
+        if (!result.success) {
+          // If the initial seed is invalid, restore and throw
+          this.restoreSnapshot(snapshotId);
+          throw new Error("Initial seed creates an impossible state");
+        }
+
+        // Clean up the snapshot since we succeeded
+        this.snapshots.delete(snapshotId);
+
+        // If we're not done, continue with entropy-based collapses
+        if (!this.completed) {
+          // Find the next cell to collapse
+          const uncollapsed = this.#grid
+            .getCells()
+            .filter((cell) => !cell.collapsed);
+          if (uncollapsed.length > 0) {
+            const lowestEntropy = this.getLowestEntropyTile(uncollapsed);
+            const value = this.pick(lowestEntropy.choices);
+            this.collapseQueue.push({
+              cells: [
+                {
+                  coords: lowestEntropy.coords,
+                  value: value,
+                },
+              ],
+              cause: "entropy",
+            });
+            this.processCollapseQueue();
+          }
+        }
+
+        // If we're done, emit complete
+        if (this.completed) {
+          this.emit("complete");
+        }
       } else {
         // Start with lowest entropy cell
         const uncollapsed = this.#grid
@@ -148,19 +193,20 @@ export class WFC extends EventEmitter {
           return;
         }
         const lowestEntropy = this.getLowestEntropyTile(uncollapsed);
-        console.log('Start: ', lowestEntropy)
+        // Pick a value for the lowest entropy cell
+        const value = this.pick(lowestEntropy.choices);
         this.collapseQueue.push({
           cells: [
             {
               coords: lowestEntropy.coords,
-              value: undefined,
+              value: value,
             },
           ],
           cause: "entropy",
         });
-      }
 
-      this.processCollapseQueue();
+        this.processCollapseQueue();
+      }
     } catch (error) {
       this.emit("error", error);
     }
@@ -272,6 +318,41 @@ export class WFC extends EventEmitter {
     return false;
   }
 
+  private handleMultiLevelBacktrack(): boolean {
+    let currentState = this.currentBacktrackState;
+    let backtrackDepth = 0;
+
+    while (currentState) {
+      backtrackDepth++;
+      this.emit("backtrack", currentState.group); // Emit backtrack event for each level
+
+      // Try to find a previous state that still has untried possibilities
+      if (!this.hasExhaustedAllChoices(currentState)) {
+        this.log(
+          LogLevel.INFO,
+          `Found valid backtrack state at depth ${backtrackDepth}`
+        );
+
+        // Restore to this state and try again
+        this.restoreSnapshot(currentState.snapshotId);
+
+        // Clear propagation queue before trying new values
+        this.propagationQueue.clear();
+
+        // Attempt to collapse with new choices
+        if (this.attemptCollapseWithRetries(currentState)) {
+          return true;
+        }
+      }
+
+      // Clean up snapshot before moving to parent
+      this.snapshots.delete(currentState.snapshotId);
+      currentState = currentState.parentState;
+    }
+
+    return false;
+  }
+
   private collapseGroupWithTracking(state: BacktrackState): CollapseResult {
     const { group, triedValues } = state;
 
@@ -319,21 +400,6 @@ export class WFC extends EventEmitter {
         triedValues.set(coordKey, new Set());
       }
       triedValues.get(coordKey)!.add(value);
-
-      this.log(
-        LogLevel.DEBUG,
-        "Trying:",
-        value.name,
-        "for cell",
-        cell.coords,
-        "(attempt",
-        state.attempts + 1,
-        "of",
-        state.group.maxAttempts ?? this.MAX_ATTEMPTS_PER_LEVEL,
-        ")",
-        "remaining untried:",
-        availableChoices.filter((c) => !tried.has(c)).map((c) => c.name),
-      );
     }
 
     // Now proceed with actual collapse using selected values
@@ -345,9 +411,12 @@ export class WFC extends EventEmitter {
     selectedValues: Map<string, TileDef>,
   ): CollapseResult {
     const affectedCells: Cell[] = [];
-    const propagatedCollapses: CollapseGroup[] = [];
+    const forcedCollapses: CellCollapse[] = [];
 
-    // First pass: collapse all cells in the group
+    // First pass: validate that all cells in the group can coexist
+    // TODO: Implement and add test
+
+    // Second pass: collapse all cells in the group
     for (const cellCollapse of group.cells) {
       const cell = this.#grid.get(cellCollapse.coords);
       if (!cell) continue;
@@ -370,16 +439,7 @@ export class WFC extends EventEmitter {
       affectedCells.push(cell);
     }
 
-    // Emit collapse event for the initial group
-    this.emit("collapse", {
-      ...group,
-      cells: group.cells.map(cell => ({
-        ...cell,
-        value: selectedValues.get(`${cell.coords[0]},${cell.coords[1]}`)
-      }))
-    });
-
-    // Second pass: propagate from all collapsed cells
+    // Third pass: propagate from all collapsed cells
     this.propagationQueue.clear();
     for (const cell of affectedCells) {
       this.queueNeighborsForPropagation(cell);
@@ -432,34 +492,33 @@ export class WFC extends EventEmitter {
           return { success: false, affectedCells };
         }
 
-        // If only one choice left, add to collapse queue
+        // If only one choice left, add to forced collapses
         if (currentCell.choices.length === 1 && !currentCell.collapsed) {
           currentCell.collapsed = true;
-          propagatedCollapses.push({
-            cells: [
-              {
-                coords: currentCell.coords,
-                value: currentCell.choices[0],
-              },
-            ],
-            cause: "propagation",
+          forcedCollapses.push({
+            coords: currentCell.coords,
+            value: currentCell.choices[0],
           });
+          this.queueNeighborsForPropagation(currentCell);
+        } else {
+          this.queueNeighborsForPropagation(currentCell);
         }
-
-        this.queueNeighborsForPropagation(currentCell);
       }
     }
 
-    // Emit propagate event after all propagation is done
-    if (affectedCells.length > 0) {
-      this.emit("propagate", affectedCells);
+    // Emit a single collapse event with all cells (initial + forced)
+    const allCollapses = [...group.cells];
+    for (const forced of forcedCollapses) {
+      allCollapses.push(forced);
     }
+    this.emit("collapse", {
+      cells: allCollapses,
+      cause: group.cause,
+    });
 
     return {
       success: true,
       affectedCells,
-      propagatedCollapses:
-        propagatedCollapses.length > 0 ? propagatedCollapses : undefined,
     };
   }
 
@@ -655,19 +714,35 @@ export class WFC extends EventEmitter {
     neighbor: Cell,
     direction: number,
   ): TileDef[] {
-    const valid = [];
-    for (const option of cell.choices) {
-      for (const adjacentOption of neighbor.choices) {
-        const d1 = option.adjacencies[direction];
-        const d2 =
-          adjacentOption.adjacencies[this.#grid.adjacencyMap[direction]];
-        if (d1 === d2) {
-          valid.push(option);
-          break;
+    const valid = new Set<TileDef>();
+    const oppositeDirection = this.#grid.adjacencyMap[direction];
+
+    // If neighbor is collapsed, we must match its adjacency
+    if (neighbor.collapsed) {
+      const neighborAdjacency = neighbor.choices[0].adjacencies[oppositeDirection];
+      for (const option of cell.choices) {
+        if (option.adjacencies[direction] === neighborAdjacency) {
+          valid.add(option);
+        }
+      }
+    } else {
+      // Otherwise, check all possible combinations
+      for (const option of cell.choices) {
+        const optionAdjacency = option.adjacencies[direction];
+
+        for (const neighborOption of neighbor.choices) {
+          const neighborAdjacency = neighborOption.adjacencies[oppositeDirection];
+
+          // Tiles can connect if their adjacency values match
+          if (optionAdjacency === neighborAdjacency) {
+            valid.add(option);
+            break; // Once we find a valid neighbor, we can stop checking this option
+          }
         }
       }
     }
-    return valid;
+
+    return Array.from(valid);
   }
 
   undoChange(delta: DeltaChange<[number, number]>): Cell[] {
@@ -696,43 +771,22 @@ export class WFC extends EventEmitter {
       const coordKey = `${cellCollapse.coords[0]},${cellCollapse.coords[1]}`;
       const tried = triedValues.get(coordKey) || new Set<TileDef>();
 
-      // If there are any untried choices, we haven't exhausted all possibilities
-      if (cell.choices.some((choice) => !tried.has(choice))) {
+      // Get choices from the snapshot state
+      const snapshot = this.snapshots.get(state.snapshotId);
+      if (!snapshot) return true; // If no snapshot, consider exhausted
+
+      const snapshotCell = snapshot.cells.find(
+        c => c.coords[0] === cell.coords[0] && c.coords[1] === cell.coords[1]
+      );
+      if (!snapshotCell) return true;
+
+      // If there are any untried choices from the snapshot state, we haven't exhausted all possibilities
+      if (snapshotCell.choices.some(choice => !tried.has(choice))) {
         return false;
       }
     }
 
     return true;
-  }
-
-  private handleMultiLevelBacktrack(): boolean {
-    let currentState = this.currentBacktrackState;
-    let backtrackDepth = 0;
-
-    while (currentState) {
-      backtrackDepth++;
-
-      // Try to find a previous state that still has untried possibilities
-      if (!this.hasExhaustedAllChoices(currentState)) {
-        this.log(
-          LogLevel.INFO,
-          `Found valid backtrack state at depth ${backtrackDepth}`
-        );
-
-        // Restore to this state and try again
-        this.restoreSnapshot(currentState.snapshotId);
-        this.emit("backtrack", currentState.group);
-
-        // Attempt to collapse with new choices
-        if (this.attemptCollapseWithRetries(currentState)) {
-          return true;
-        }
-      }
-
-      currentState = currentState.parentState;
-    }
-
-    return false;
   }
 
   // Public method to safely iterate over the current grid state
