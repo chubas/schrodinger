@@ -1,3 +1,5 @@
+import { AdjacencyRule, DirectionalAdjacency, CompoundAdjacency } from "./Adjacencies";
+
 export type TileDef = {
   /**
    * List of adjacency definitions.
@@ -6,7 +8,7 @@ export type TileDef = {
    * The adjacencies are ordered: top, right, bottom, left
    * Example: ["A", "B", "A|B", "C"]
    */
-  adjacencies: string[];
+  adjacencies: AdjacencyRule[];
   name: string;
   rotation?: number;
   reflection?: number;
@@ -30,19 +32,105 @@ export class TileDefFactory {
     };
   }
 
-  static extractAdjacencies = (adjacency: string): string[][] => {
-    const result: string[][] = [];
-    const adjacencyDefs = adjacency.split("|");
-    for (const adjacencyDef of adjacencyDefs) {
-      // Adjacencies can be a single character, or a sequence of characters between parentheses (except `(`, `)`, and `|`)
-      const adjacencyDefParts = adjacencyDef.match(/\(([^)]+)\)|./g);
-      if (adjacencyDefParts) {
-        const adjacencyDefPartsCleaned = adjacencyDefParts.map((part) =>
-          part.replace(/[()]/g, ""),
-        );
-        result.push(adjacencyDefPartsCleaned);
+  static extractAdjacencies(adjacencyString: string): AdjacencyRule[] {
+    if (!adjacencyString) {
+      throw new Error("Empty adjacency definition");
+    }
+
+    // Split by | to get each side's adjacency
+    const sides = adjacencyString.split("|");
+    if (sides.some(s => !s)) {
+      throw new Error("Empty adjacency definition");
+    }
+
+    return sides.map(side => this.parseAdjacencyRule(side.trim()));
+  }
+
+  private static parseAdjacencyRule(rule: string): AdjacencyRule {
+    // Check for compound adjacency with brackets
+    if (rule.includes("[") || rule.includes("]")) {
+      const openCount = (rule.match(/\[/g) || []).length;
+      const closeCount = (rule.match(/\]/g) || []).length;
+
+      if (openCount !== closeCount) {
+        throw new Error("Unmatched brackets in adjacency definition");
+      }
+
+      const compoundMatch = rule.match(/^([^[]*)\[([^>]+)>([^\]]+)\](.*)$/);
+      if (!compoundMatch) {
+        throw new Error("Invalid compound adjacency format");
+      }
+
+      const [_, left, from, to, right] = compoundMatch;
+      if (from.includes(">") || to.includes(">")) {
+        throw new Error("Invalid compound adjacency format");
+      }
+
+      return [
+        ...(left ? this.tokenizeSimpleAdjacency(left) : []),
+        { from: from.trim(), to: to.trim() } as DirectionalAdjacency,
+        ...(right ? this.tokenizeSimpleAdjacency(right) : [])
+      ];
+    }
+
+    // Check for simple directional adjacency
+    if (rule.includes(">")) {
+      const directionalMatch = rule.match(/^([^>]+)>([^>]+)$/);
+      if (!directionalMatch || rule.match(/>/g)!.length > 1) {
+        throw new Error("Invalid directional adjacency format");
+      }
+      const [_, from, to] = directionalMatch;
+      return [{ from: from.trim(), to: to.trim() }];
+    }
+
+    // Must be a simple adjacency
+    return this.tokenizeSimpleAdjacency(rule);
+  }
+
+  private static tokenizeSimpleAdjacency(rule: string): string[] {
+    const tokens: string[] = [];
+    let currentToken = "";
+    let inParens = false;
+
+    for (let i = 0; i < rule.length; i++) {
+      const char = rule[i];
+      if (char === "(") {
+        if (inParens) {
+          throw new Error("Nested parentheses not allowed");
+        }
+        if (currentToken) {
+          // Split current token into individual characters
+          tokens.push(...currentToken.split(""));
+          currentToken = "";
+        }
+        inParens = true;
+      } else if (char === ")") {
+        if (!inParens) {
+          throw new Error("Unmatched closing parenthesis");
+        }
+        if (currentToken) {
+          tokens.push(currentToken);
+          currentToken = "";
+        }
+        inParens = false;
+      } else {
+        currentToken += char;
       }
     }
-    return result;
-  };
+
+    if (inParens) {
+      throw new Error("Unmatched opening parenthesis");
+    }
+
+    if (currentToken) {
+      if (!inParens) {
+        // Split non-parenthesized content into individual characters
+        tokens.push(...currentToken.split(""));
+      } else {
+        tokens.push(currentToken);
+      }
+    }
+
+    return tokens.map(t => t.trim()).filter(t => t);
+  }
 }
