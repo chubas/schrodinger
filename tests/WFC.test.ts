@@ -1,4 +1,4 @@
-import { WFC } from "../src/WFC";
+import { LogLevel, WFC } from "../src/WFC";
 import { SquareGrid, Cell } from "../src/Grid";
 import { TileDef } from "../src/TileDef";
 import { RandomLib } from "../src/RandomLib";
@@ -98,6 +98,7 @@ describe("WFC", () => {
 
       await new Promise<void>((resolve) => {
         wfc.on("collapse", (group) => {
+          console.log('Collapsing', JSON.stringify(group))
           collapses.push(group);
         });
 
@@ -174,6 +175,32 @@ describe("WFC", () => {
           coords: [0, 0],
           value: horizontalTiles[0]
         }]);
+      });
+    });
+  });
+
+  describe("Event Information", () => {
+    it("should include value in collapse events", async () => {
+      const grid = new SquareGrid(1, 1);
+      const wfc = new WFC(mockTiles, grid, { random: new DeterministicRNG([0]) });
+
+      await new Promise<void>((resolve) => {
+        wfc.on("collapse", (group) => {
+          console.log('Collapsed;;;;', JSON.stringify(group))
+          expect(group.cells).toHaveLength(1);
+          const cell = group.cells[0];
+
+          // Verify cell has coords and value properties
+          expect(cell).toHaveProperty('coords');
+          expect(cell).toHaveProperty('value');
+
+          // Value should be one of our mockTiles
+          expect(mockTiles).toContainEqual(cell.value);
+
+          resolve();
+        });
+
+        wfc.start();
       });
     });
   });

@@ -3,12 +3,12 @@ import { AdjacencyRule, DirectionalAdjacency, CompoundAdjacency } from "./Adjace
 export type TileDef = {
   /**
    * List of adjacency definitions.
-   * The adjacency is an arbitrary string that must match the adjacency of another tile.
-   * It can accept multiple adjacencies as strings joined by |
+   * Can be either:
+   * 1. A string that will be parsed into an AdjacencyRule (e.g. "A", "B>C", "A[B>C]D")
+   * 2. An AdjacencyRule object directly
    * The adjacencies are ordered: top, right, bottom, left
-   * Example: ["A", "B", "A|B", "C"]
    */
-  adjacencies: AdjacencyRule[];
+  adjacencies: (string | AdjacencyRule)[];
   name: string;
   rotation?: number;
   reflection?: number;
@@ -25,7 +25,9 @@ export class TileDefFactory {
   static defineTile(tile: Partial<TileDef>): TileDef {
     return {
       name: tile.name ?? "",
-      adjacencies: tile.adjacencies ?? [],
+      adjacencies: (tile.adjacencies ?? []).map(adj =>
+        typeof adj === 'string' ? this.parseAdjacencyRule(adj) : adj
+      ),
       rotation: tile.rotation ?? 0,
       reflection: tile.reflection ?? 0,
       draw: tile.draw ?? (() => {}),
@@ -46,7 +48,7 @@ export class TileDefFactory {
     return sides.map(side => this.parseAdjacencyRule(side.trim()));
   }
 
-  private static parseAdjacencyRule(rule: string): AdjacencyRule {
+  static parseAdjacencyRule(rule: string): AdjacencyRule {
     // Check for compound adjacency with brackets
     if (rule.includes("[") || rule.includes("]")) {
       const openCount = (rule.match(/\[/g) || []).length;

@@ -2,6 +2,7 @@ import { RandomLib, DefaultRandom } from "./RandomLib.js";
 import { TileDef } from "./TileDef.js";
 import { Grid, Cell, GridSnapshot, SquareGrid } from "./Grid.js";
 import { EventEmitter } from "events";
+import { matchAdjacencies } from "./Adjacencies.js";
 
 export enum LogLevel {
   NONE = 0,
@@ -139,74 +140,69 @@ export class WFC extends EventEmitter {
         // Create a snapshot before applying the seed
         const snapshotId = this.takeSnapshot();
 
-        // Apply the seed and check for forced collapses
-        const result = this.collapseGroupWithValues(
-          { cells: initialSeed, cause: "initial" },
-          new Map(initialSeed.map(cell => [
-            `${cell.coords[0]},${cell.coords[1]}`,
-            cell.value!
-          ]))
-        );
+        try {
+          // Apply the seed and check for forced collapses
+          const result = this.collapseGroupWithValues(
+            { cells: initialSeed, cause: "initial" },
+            new Map(initialSeed.map(cell => [
+              `${cell.coords[0]},${cell.coords[1]}`,
+              cell.value!
+            ]))
+          );
 
-        if (!result.success) {
-          // If the initial seed is invalid, restore and throw
-          this.restoreSnapshot(snapshotId);
-          throw new Error("Initial seed creates an impossible state");
+          if (!result.success) {
+            // If the initial seed is invalid, restore and throw
+            this.restoreSnapshot(snapshotId);
+            this.snapshots.delete(snapshotId);
+            throw new Error("Initial seed creates an impossible state");
+          }
+
+          // Clean up the snapshot since we succeeded
+          this.snapshots.delete(snapshotId);
+        } catch (error) {
+          // Clean up snapshot on any error
+          this.snapshots.delete(snapshotId);
+          throw error;
         }
-
-        // Clean up the snapshot since we succeeded
-        this.snapshots.delete(snapshotId);
 
         // If we're not done, continue with entropy-based collapses
         if (!this.completed) {
-          // Find the next cell to collapse
           const uncollapsed = this.#grid
             .getCells()
             .filter((cell) => !cell.collapsed);
           if (uncollapsed.length > 0) {
             const lowestEntropy = this.getLowestEntropyTile(uncollapsed);
-            const value = this.pick(lowestEntropy.choices);
             this.collapseQueue.push({
               cells: [
                 {
                   coords: lowestEntropy.coords,
-                  value: value,
+                  value: undefined,
                 },
               ],
               cause: "entropy",
             });
-            this.processCollapseQueue();
           }
         }
-
-        // If we're done, emit complete
-        if (this.completed) {
-          this.emit("complete");
-        }
       } else {
-        // Start with lowest entropy cell
+        // Start with lowest entropy tile
         const uncollapsed = this.#grid
           .getCells()
           .filter((cell) => !cell.collapsed);
-        if (uncollapsed.length === 0) {
-          this.emit("complete");
-          return;
+        if (uncollapsed.length > 0) {
+          const lowestEntropy = this.getLowestEntropyTile(uncollapsed);
+          this.collapseQueue.push({
+            cells: [
+              {
+                coords: lowestEntropy.coords,
+                value: undefined,
+              },
+            ],
+            cause: "entropy",
+          });
         }
-        const lowestEntropy = this.getLowestEntropyTile(uncollapsed);
-        // Pick a value for the lowest entropy cell
-        const value = this.pick(lowestEntropy.choices);
-        this.collapseQueue.push({
-          cells: [
-            {
-              coords: lowestEntropy.coords,
-              value: value,
-            },
-          ],
-          cause: "entropy",
-        });
-
-        this.processCollapseQueue();
       }
+
+      this.processCollapseQueue();
     } catch (error) {
       this.emit("error", error);
     }
@@ -246,6 +242,10 @@ export class WFC extends EventEmitter {
             "Has parent:",
             !!this.currentBacktrackState?.parentState,
           );
+
+          // Clean up the current snapshot before backtracking
+          // this.snapshots.delete(snapshotId);
+
           if (!this.handleMultiLevelBacktrack()) {
             throw new Error(
               "Pattern is uncollapsable - no valid solutions found",
@@ -257,6 +257,9 @@ export class WFC extends EventEmitter {
         // Success! Keep the backtrack state for potential future backtracking
         // but mark it as successful so we know we can try different values if needed
         backtrackState.wasSuccessful = true;
+
+        // Clean up snapshot since we succeeded
+        this.snapshots.delete(snapshotId);
 
         // If queue is empty but we still have uncollapsed cells, add lowest entropy
         if (this.collapseQueue.length === 0 && !this.completed) {
@@ -277,6 +280,9 @@ export class WFC extends EventEmitter {
           }
         }
       } catch (error) {
+        console.log('The error is....', error)
+        // Clean up snapshot on any error
+        this.snapshots.delete(snapshotId);
         // Fatal error - restore to last known good state
         if (this.currentBacktrackState) {
           this.restoreSnapshot(this.currentBacktrackState.snapshotId);
@@ -414,7 +420,48 @@ export class WFC extends EventEmitter {
     const forcedCollapses: CellCollapse[] = [];
 
     // First pass: validate that all cells in the group can coexist
-    // TODO: Implement and add test
+    for (const cellCollapse of group.cells) {
+      const cell = this.#grid.get(cellCollapse.coords);
+      if (!cell) continue;
+
+      const coordKey = `${cellCollapse.coords[0]},${cellCollapse.coords[1]}`;
+      const value = selectedValues.get(coordKey)!;
+
+      this.log(LogLevel.DEBUG, `Validating cell at ${coordKey} with value ${value.name}`);
+
+      // Check if this value is compatible with all neighbors that are already collapsed
+      // or are part of the group
+      const neighbors = this.#grid.getNeighbors(cellCollapse.coords);
+      for (let i = 0; i < neighbors.length; i++) {
+        const neighbor = neighbors[i];
+        if (!neighbor) continue;
+
+        const neighborCoordKey = `${neighbor.coords[0]},${neighbor.coords[1]}`;
+        const neighborValue = selectedValues.get(neighborCoordKey) || (neighbor.collapsed ? neighbor.choices[0] : undefined);
+
+        console.log({ neighbor, neighborValue, neighborCoordKey, selectedValues })
+        if (neighborValue) {
+          // Get the adjacency rules for this direction
+          const cellAdjacency = value.adjacencies[i];
+          // Get the opposite direction's adjacency rule from the neighbor
+          // The adjacencyMap maps each direction to its opposite
+          const neighborAdjacency = neighborValue.adjacencies[this.#grid.adjacencyMap[i]];
+
+          console.log(`  Checking neighbor at ${neighborCoordKey} with value ${neighborValue.name}`);
+          console.log(`  Cell adjacency: ${JSON.stringify(cellAdjacency)}`);
+          console.log(`  Neighbor adjacency: ${JSON.stringify(neighborAdjacency)}`);
+          console.log(`  Direction: ${i}, Opposite: ${this.#grid.adjacencyMap[i]}`);
+
+          let m = matchAdjacencies(cellAdjacency, neighborAdjacency)
+          console.log('M', m)
+          // Check if the adjacency rules allow these tiles to be neighbors
+          if (!m) {
+            this.log(LogLevel.DEBUG, `  Adjacencies do not match!`);
+            return { success: false, affectedCells };
+          }
+        }
+      }
+    }
 
     // Second pass: collapse all cells in the group
     for (const cellCollapse of group.cells) {
@@ -507,10 +554,28 @@ export class WFC extends EventEmitter {
     }
 
     // Emit a single collapse event with all cells (initial + forced)
-    const allCollapses = [...group.cells];
+    const allCollapses = [...group.cells].map(cellCollapse => {
+      const coordKey = `${cellCollapse.coords[0]},${cellCollapse.coords[1]}`;
+      const value = selectedValues.get(coordKey);
+      if (!value) {
+        throw new Error(`No value found for cell at ${coordKey}`);
+      }
+      return {
+        coords: cellCollapse.coords,
+        value
+      };
+    });
+
     for (const forced of forcedCollapses) {
-      allCollapses.push(forced);
+      if (!forced.value) {
+        throw new Error(`No value found for forced cell at ${forced.coords}`);
+      }
+      allCollapses.push({
+        coords: forced.coords,
+        value: forced.value
+      });
     }
+
     this.emit("collapse", {
       cells: allCollapses,
       cause: group.cause,
@@ -554,12 +619,17 @@ export class WFC extends EventEmitter {
 
   private debugGridState() {
     const iterator = this.#grid.iterate();
+    let str = [];
     for (const [cell, coords] of iterator) {
-      this.log(
-        LogLevel.DEBUG,
-        `[${coords}]: ${cell.choices.map((c) => c.name).join(",")}`,
-      );
+      // this.log(
+        // LogLevel.DEBUG,
+        str.push(`[${coords}]: ${cell.choices.map((c) => c.name).join(",")}`)
+      // );
     }
+    this.log(
+      LogLevel.DEBUG,
+      str.join("\n")
+    )
   }
 
   // Return the tile with the least amount of possible tile definitions.
@@ -716,25 +786,28 @@ export class WFC extends EventEmitter {
   ): TileDef[] {
     const valid = new Set<TileDef>();
     const oppositeDirection = this.#grid.adjacencyMap[direction];
+    console.log('Filtering valid adjacencies for:', JSON.stringify(cell))
 
     // If neighbor is collapsed, we must match its adjacency
     if (neighbor.collapsed) {
+      console.log('Neighbor collapsed')
       const neighborAdjacency = neighbor.choices[0].adjacencies[oppositeDirection];
       for (const option of cell.choices) {
-        if (option.adjacencies[direction] === neighborAdjacency) {
+        if (matchAdjacencies(option.adjacencies[direction], neighborAdjacency)) {
           valid.add(option);
         }
       }
     } else {
       // Otherwise, check all possible combinations
+      console.log('No collapsed neighbor, checking all adjacency combinations')
       for (const option of cell.choices) {
         const optionAdjacency = option.adjacencies[direction];
 
         for (const neighborOption of neighbor.choices) {
           const neighborAdjacency = neighborOption.adjacencies[oppositeDirection];
 
-          // Tiles can connect if their adjacency values match
-          if (optionAdjacency === neighborAdjacency) {
+          // Tiles can connect if their adjacencies match
+          if (matchAdjacencies(optionAdjacency, neighborAdjacency)) {
             valid.add(option);
             break; // Once we find a valid neighbor, we can stop checking this option
           }
