@@ -1,4 +1,4 @@
-import { TileDefFactory } from "./TileDef";
+import { TileDefFactory } from "./TileDef.js";
 
 export type SimpleAdjacency = string[];
 
@@ -60,7 +60,7 @@ function matchCompoundAdjacencies(adj1: CompoundAdjacency, adj2: CompoundAdjacen
 
 export function matchAdjacencies(adj1: string | AdjacencyRule, adj2: string | AdjacencyRule): boolean {
 
-  console.log('COMPARING: ', JSON.stringify(adj1), ' and ', JSON.stringify(adj2))
+  // console.log('COMPARING: ', JSON.stringify(adj1), ' and ', JSON.stringify(adj2))
 
   // Parse strings into AdjacencyRules
   const rule1 = typeof adj1 === 'string' ? TileDefFactory.parseAdjacencyRule(adj1) : adj1;
@@ -81,7 +81,7 @@ export function matchAdjacencies(adj1: string | AdjacencyRule, adj2: string | Ad
   if (isCompoundAdjacency(rule1) && isCompoundAdjacency(rule2)) {
     let r = matchCompoundAdjacencies(rule1, rule2);
     // console.log("compound")
-    console.log('compound', {r})
+    // console.log('compound', {r})
     return r
   }
 

@@ -137,6 +137,9 @@ export class WFC extends EventEmitter {
   start(initialSeed?: CellCollapse[]): void {
     try {
       if (initialSeed && initialSeed.length > 0) {
+        this.log(LogLevel.DEBUG, "Starting with initial seed");
+        this.log(LogLevel.DEBUG, `Seed cells: ${initialSeed.map(c => `${c.coords}=${c.value?.name}`).join(', ')}`);
+
         // Create a snapshot before applying the seed
         const snapshotId = this.takeSnapshot();
 
@@ -172,6 +175,7 @@ export class WFC extends EventEmitter {
             .filter((cell) => !cell.collapsed);
           if (uncollapsed.length > 0) {
             const lowestEntropy = this.getLowestEntropyTile(uncollapsed);
+            this.log(LogLevel.DEBUG, `Adding entropy-based collapse for cell ${lowestEntropy.coords}`);
             this.collapseQueue.push({
               cells: [
                 {
@@ -184,12 +188,14 @@ export class WFC extends EventEmitter {
           }
         }
       } else {
+        this.log(LogLevel.DEBUG, "Starting without seed");
         // Start with lowest entropy tile
         const uncollapsed = this.#grid
           .getCells()
           .filter((cell) => !cell.collapsed);
         if (uncollapsed.length > 0) {
           const lowestEntropy = this.getLowestEntropyTile(uncollapsed);
+          this.log(LogLevel.DEBUG, `Selected initial cell ${lowestEntropy.coords} with choices: ${lowestEntropy.choices.map(c => c.name).join(',')}`);
           this.collapseQueue.push({
             cells: [
               {
@@ -419,7 +425,11 @@ export class WFC extends EventEmitter {
     const affectedCells: Cell[] = [];
     const forcedCollapses: CellCollapse[] = [];
 
+    this.log(LogLevel.DEBUG, "Starting collapse group validation");
+    this.log(LogLevel.DEBUG, `Selected values: ${Array.from(selectedValues.entries()).map(([k,v]) => `${k}=${v.name}`).join(', ')}`);
+
     // First pass: validate that all cells in the group can coexist
+    this.log(LogLevel.DEBUG, "🔍 First pass: validating and selecting values for collapse")
     for (const cellCollapse of group.cells) {
       const cell = this.#grid.get(cellCollapse.coords);
       if (!cell) continue;
@@ -428,6 +438,7 @@ export class WFC extends EventEmitter {
       const value = selectedValues.get(coordKey)!;
 
       this.log(LogLevel.DEBUG, `Validating cell at ${coordKey} with value ${value.name}`);
+      this.log(LogLevel.DEBUG, `Cell adjacencies: ${value.adjacencies.map(a => JSON.stringify(a)).join(', ')}`);
 
       // Check if this value is compatible with all neighbors that are already collapsed
       // or are part of the group
@@ -439,30 +450,27 @@ export class WFC extends EventEmitter {
         const neighborCoordKey = `${neighbor.coords[0]},${neighbor.coords[1]}`;
         const neighborValue = selectedValues.get(neighborCoordKey) || (neighbor.collapsed ? neighbor.choices[0] : undefined);
 
-        console.log({ neighbor, neighborValue, neighborCoordKey, selectedValues })
+        this.log(LogLevel.DEBUG, `Checking neighbor at ${neighborCoordKey}: ${neighborValue?.name}`);
+
         if (neighborValue) {
           // Get the adjacency rules for this direction
           const cellAdjacency = value.adjacencies[i];
           // Get the opposite direction's adjacency rule from the neighbor
-          // The adjacencyMap maps each direction to its opposite
           const neighborAdjacency = neighborValue.adjacencies[this.#grid.adjacencyMap[i]];
 
-          console.log(`  Checking neighbor at ${neighborCoordKey} with value ${neighborValue.name}`);
-          console.log(`  Cell adjacency: ${JSON.stringify(cellAdjacency)}`);
-          console.log(`  Neighbor adjacency: ${JSON.stringify(neighborAdjacency)}`);
-          console.log(`  Direction: ${i}, Opposite: ${this.#grid.adjacencyMap[i]}`);
+          this.log(LogLevel.DEBUG, `Direction ${i} -> ${this.#grid.adjacencyMap[i]}`);
+          this.log(LogLevel.DEBUG, `Cell adjacency: ${JSON.stringify(cellAdjacency)}`);
+          this.log(LogLevel.DEBUG, `Neighbor adjacency: ${JSON.stringify(neighborAdjacency)}`);
 
-          let m = matchAdjacencies(cellAdjacency, neighborAdjacency)
-          console.log('M', m)
-          // Check if the adjacency rules allow these tiles to be neighbors
-          if (!m) {
-            this.log(LogLevel.DEBUG, `  Adjacencies do not match!`);
+          if (!matchAdjacencies(cellAdjacency, neighborAdjacency)) {
+            this.log(LogLevel.DEBUG, "Adjacencies do not match - collapse group is invalid");
             return { success: false, affectedCells };
           }
         }
       }
     }
 
+    this.log(LogLevel.DEBUG, `🎳 Second pass - collapsing group: ${JSON.stringify(group.cells)}`)
     // Second pass: collapse all cells in the group
     for (const cellCollapse of group.cells) {
       const cell = this.#grid.get(cellCollapse.coords);
@@ -487,6 +495,7 @@ export class WFC extends EventEmitter {
     }
 
     // Third pass: propagate from all collapsed cells
+    this.log(LogLevel.DEBUG, `💥Third pass: propagating collapse for: ${JSON.stringify(affectedCells)}`)
     this.propagationQueue.clear();
     for (const cell of affectedCells) {
       this.queueNeighborsForPropagation(cell);
@@ -498,14 +507,17 @@ export class WFC extends EventEmitter {
       if (!currentCell) continue; // TypeScript safety
 
       this.propagationQueue.delete(currentCell);
+      this.log(LogLevel.DEBUG, ` 🦋 Propagating from ${currentCell.coords}, cell: ${JSON.stringify(currentCell)}`)
       const originalChoices = [...currentCell.choices];
       const neighbors = this.#grid.getNeighbors(currentCell.coords);
+
 
       // Update choices based on all neighbors
       for (let i = 0; i < neighbors.length; i++) {
         const neighbor = neighbors[i];
         if (!neighbor) continue;
 
+        this.log(LogLevel.DEBUG, `   >>>> Will filter valid adjacencies for cell ${currentCell.coords} against neighbor ${neighbor.coords}`)
         const validChoices = this.filterValidAdjacencies(
           currentCell,
           neighbor,
@@ -524,7 +536,7 @@ export class WFC extends EventEmitter {
         );
         this.log(
           LogLevel.DEBUG,
-          "Removed choices:",
+          " 🐍 Removed choices:",
           removedChoices.map((c) => c.name),
           "for cell",
           currentCell.coords,
@@ -541,6 +553,7 @@ export class WFC extends EventEmitter {
 
         // If only one choice left, add to forced collapses
         if (currentCell.choices.length === 1 && !currentCell.collapsed) {
+          this.log(LogLevel.DEBUG, `🧱 Forcing collapse on ${JSON.stringify(currentCell)}, enqueueing`)
           currentCell.collapsed = true;
           forcedCollapses.push({
             coords: currentCell.coords,
@@ -548,6 +561,7 @@ export class WFC extends EventEmitter {
           });
           this.queueNeighborsForPropagation(currentCell);
         } else {
+          this.log(LogLevel.DEBUG, `⛱️ No propagation occured for ${currentCell.coords}`)
           this.queueNeighborsForPropagation(currentCell);
         }
       }
@@ -600,7 +614,7 @@ export class WFC extends EventEmitter {
     const snapshot = this.#grid.toSnapshot();
     const id = this.snapshotCounter++;
     this.snapshots.set(id, snapshot);
-    this.log(LogLevel.DEBUG, "Taking snapshot", id, "Current grid state:");
+    this.log(LogLevel.DEBUG, "📷 Taking snapshot", id, "Current grid state:");
     this.debugGridState();
     return id;
   }
@@ -650,83 +664,85 @@ export class WFC extends EventEmitter {
   }
 
   // Modified propagate method to use two-phase approach
-  propagate(cell: Cell, collapseValue: TileDef): DeltaChange<[number, number]> {
-    const proposedChanges = new Map<string, ProposedChange>();
-    const changedValues: DeltaChange<[number, number]> = {
-      collapsedCell: cell,
-      pickedValue: collapseValue,
-      discardedValues: [],
-    };
+  // propagate(cell: Cell, collapseValue: TileDef): DeltaChange<[number, number]> {
+  //   this.log(LogLevel.DEBUG, ` 👾 Propagating from ${cell.coords}, cell: ${JSON.stringify(cell)}`);
+  //   const proposedChanges = new Map<string, ProposedChange>();
+  //   const changedValues: DeltaChange<[number, number]> = {
+  //     collapsedCell: cell,
+  //     pickedValue: collapseValue,
+  //     discardedValues: [],
+  //   };
 
-    // Phase 1: Collect all potential changes without applying them
-    const cellsToProcess = [cell];
-    const processedCells = new Set<string>();
+  //   // Phase 1: Collect all potential changes without applying them
+  //   const cellsToProcess = [cell];
+  //   const processedCells = new Set<string>();
 
-    while (cellsToProcess.length > 0) {
-      const currentCell = cellsToProcess.shift()!;
-      const cellKey = `${currentCell.coords[0]},${currentCell.coords[1]}`;
+  //   while (cellsToProcess.length > 0) {
+  //     const currentCell = cellsToProcess.shift()!;
+  //     const cellKey = `${currentCell.coords[0]},${currentCell.coords[1]}`;
 
-      if (processedCells.has(cellKey)) continue;
-      processedCells.add(cellKey);
+  //     if (processedCells.has(cellKey)) continue;
+  //     processedCells.add(cellKey);
 
-      const neighbors = this.#grid.getNeighbors(currentCell.coords);
-      for (let i = 0; i < neighbors.length; i++) {
-        const neighbor = neighbors[i];
-        if (!neighbor || neighbor.collapsed) continue;
+  //     const neighbors = this.#grid.getNeighbors(currentCell.coords);
+  //     for (let i = 0; i < neighbors.length; i++) {
+  //       const neighbor = neighbors[i];
+  //       if (!neighbor || neighbor.collapsed) continue;
 
-        const neighborKey = `${neighbor.coords[0]},${neighbor.coords[1]}`;
-        if (processedCells.has(neighborKey)) continue;
+  //       const neighborKey = `${neighbor.coords[0]},${neighbor.coords[1]}`;
+  //       if (processedCells.has(neighborKey)) continue;
 
-        const validAdjacencies = this.filterValidAdjacencies(
-          neighbor,
-          currentCell,
-          i,
-        );
+  //       const validAdjacencies = this.filterValidAdjacencies(
+  //         neighbor,
+  //         currentCell,
+  //         i,
+  //       );
 
-        // Only track changes if the choices would actually change
-        if (validAdjacencies.length !== neighbor.choices.length) {
-          proposedChanges.set(neighborKey, {
-            cell: neighbor,
-            newChoices: validAdjacencies,
-            originalChoices: [...neighbor.choices],
-          });
-          cellsToProcess.push(neighbor);
-        }
-      }
-    }
-    this.log(LogLevel.DEBUG, "Proposed changes:", proposedChanges);
+  //       // Only track changes if the choices would actually change
+  //       if (validAdjacencies.length !== neighbor.choices.length) {
+  //         this.log(LogLevel.DEBUG, `🔄 Neighbor at ${neighbor.coords} has ${validAdjacencies.length} valid adjacencies, original: ${neighbor.choices.length}`);
+  //         proposedChanges.set(neighborKey, {
+  //           cell: neighbor,
+  //           newChoices: validAdjacencies,
+  //           originalChoices: [...neighbor.choices],
+  //         });
+  //         cellsToProcess.push(neighbor);
+  //       }
+  //     }
+  //   }
+  //   this.log(LogLevel.DEBUG, "Proposed changes:", proposedChanges);
 
-    // Phase 2: Validate and apply changes
-    const invalidChanges = this.validateProposedChanges(proposedChanges);
-    if (invalidChanges.size > 0) {
-      // If we found invalid changes, mark for backtracking
-      changedValues.backtrack = true;
-      return changedValues;
-    }
+  //   // Phase 2: Validate and apply changes
+  //   const invalidChanges = this.validateProposedChanges(proposedChanges);
+  //   if (invalidChanges.size > 0) {
+  //     // If we found invalid changes, mark for backtracking
+  //     changedValues.backtrack = true;
+  //     return changedValues;
+  //   }
 
-    // Apply all valid changes
-    for (const [_key, change] of proposedChanges) {
-      const { cell, newChoices, originalChoices } = change;
-      cell.choices = newChoices;
+  //   // Apply all valid changes
+  //   for (const [_key, change] of proposedChanges) {
+  //     const { cell, newChoices, originalChoices } = change;
+  //     cell.choices = newChoices;
 
-      // Track removed choices for the delta
-      const removed = originalChoices.filter((c) => !newChoices.includes(c));
-      if (removed.length > 0) {
-        changedValues.discardedValues.push({
-          coords: cell.coords,
-          tiles: removed,
-          collapsed: cell.collapsed,
-        });
-      }
+  //     // Track removed choices for the delta
+  //     const removed = originalChoices.filter((c) => !newChoices.includes(c));
+  //     if (removed.length > 0) {
+  //       changedValues.discardedValues.push({
+  //         coords: cell.coords,
+  //         tiles: removed,
+  //         collapsed: cell.collapsed,
+  //       });
+  //     }
 
-      // Auto-collapse if only one choice remains
-      if (newChoices.length === 1 && !cell.collapsed) {
-        cell.collapsed = true;
-      }
-    }
+  //     // Auto-collapse if only one choice remains
+  //     if (newChoices.length === 1 && !cell.collapsed) {
+  //       cell.collapsed = true;
+  //     }
+  //   }
 
-    return changedValues;
-  }
+  //   return changedValues;
+  // }
 
   // Helper method to validate proposed changes
   private validateProposedChanges(
@@ -786,11 +802,23 @@ export class WFC extends EventEmitter {
   ): TileDef[] {
     const valid = new Set<TileDef>();
     const oppositeDirection = this.#grid.adjacencyMap[direction];
-    console.log('Filtering valid adjacencies for:', JSON.stringify(cell))
+
+    // Skip diagonal relationships - cells that aren't directly adjacent
+    // Check if the cells are actually neighbors (orthogonally adjacent)
+    const [cx, cy] = cell.coords as [number, number];
+    const [nx, ny] = neighbor.coords as [number, number];
+
+    // Calculate Manhattan distance - should be 1 for orthogonal neighbors
+    const distance = Math.abs(cx - nx) + Math.abs(cy - ny);
+    if (distance !== 1) {
+      // These cells aren't directly adjacent, so all choices are valid
+      return [...cell.choices];
+    }
+
+    this.log(LogLevel.DEBUG, `  🤔 ${neighbor.collapsed ? 'Comparing against collapsed neighbor' : 'Checking all combinations for cell'} ${cell.coords} against neighbor ${neighbor.coords}`);
 
     // If neighbor is collapsed, we must match its adjacency
     if (neighbor.collapsed) {
-      console.log('Neighbor collapsed')
       const neighborAdjacency = neighbor.choices[0].adjacencies[oppositeDirection];
       for (const option of cell.choices) {
         if (matchAdjacencies(option.adjacencies[direction], neighborAdjacency)) {
@@ -799,7 +827,6 @@ export class WFC extends EventEmitter {
       }
     } else {
       // Otherwise, check all possible combinations
-      console.log('No collapsed neighbor, checking all adjacency combinations')
       for (const option of cell.choices) {
         const optionAdjacency = option.adjacencies[direction];
 
@@ -815,7 +842,9 @@ export class WFC extends EventEmitter {
       }
     }
 
-    return Array.from(valid);
+    const result = Array.from(valid);
+    this.log(LogLevel.DEBUG, `  ➡️ Valid options for cell ${cell.coords}: ${result.map(r => r.name).join(',')}`);
+    return result;
   }
 
   undoChange(delta: DeltaChange<[number, number]>): Cell[] {

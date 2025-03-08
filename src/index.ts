@@ -1,5 +1,5 @@
 import { SquareGrid } from "./Grid.js";
-import { WFC, CellCollapse } from "./WFC.js";
+import { WFC, CellCollapse, LogLevel } from "./WFC.js";
 import { TileDef } from "./TileDef.js";
 import { RandomLib } from "./RandomLib.js";
 import seedrandom from "seedrandom";
@@ -81,7 +81,8 @@ const tiledefs: TileDef[] = [
 ];
 
 const rngs: number[] = [];
-const grid = new SquareGrid(10, 10);
+// const grid = new SquareGrid(10, 10);
+const grid = new SquareGrid(2, 2);
 // let r = Math.floor(Math.random() * 10000);
 // const r = process.argv[2] || 100;
 // let r = "1"; // This seed fails with an uncollapsable error
@@ -90,7 +91,21 @@ console.log("Initial seed:", r);
 
 const random = new SeedRandom(r);
 
-const wfc = new WFC(tiledefs, grid, { random });
+
+const chessTiles: TileDef[] = [
+  {
+    name: "White",
+    adjacencies: ["W>B", "W>B", "W>B", "W>B"],
+    draw: () => {},
+  },
+  {
+    name: "Black",
+    adjacencies: ["B>W", "B>W", "B>W", "B>W"],
+    draw: () => {},
+  },
+];
+
+const wfc = new WFC(chessTiles, grid, { random, logLevel: LogLevel.DEBUG });
 
 const debugWFC = (clean = false) => {
   // Iterate over all the tiles in the grid, and draw them
