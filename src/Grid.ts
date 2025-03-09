@@ -81,7 +81,6 @@ export class SquareGrid implements Grid<[number, number]> {
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {
         const n = this.width * y + x;
-        // console.log(n, x, y, this.cells[n]);
         yield [this.cells[n], [x, y]];
       }
     }
@@ -89,29 +88,28 @@ export class SquareGrid implements Grid<[number, number]> {
 
   getNeighbors(coords: [number, number]): (Cell | null)[] {
     const deltas = [
-      [0, -1],
-      [1, 0],
-      [0, 1],
-      [-1, 0],
+      [0, -1], // Top
+      [1, 0],  // Right
+      [0, 1],  // Bottom
+      [-1, 0], // Left
     ];
     const [x, y] = coords;
     const neighbors = [];
     for (const [dx, dy] of deltas) {
-      const neighbor = this.get([x + dx, y + dy]);
-      if (neighbor) {
-        neighbors.push(neighbor);
-      } else {
-        neighbors.push(null);
-      }
+      const nx = x + dx;
+      const ny = y + dy;
+      const neighbor = this.get([nx, ny]);
+      neighbors.push(neighbor); // Push null if out of bounds
     }
     return neighbors;
   }
 
   get([x, y]: [number, number]): Cell | null {
-    const n = this.width * y + x;
-    if (n < 0 || n >= this.cells.length) {
+    // Check if coordinates are out of bounds
+    if (x < 0 || y < 0 || x >= this.width || y >= this.height) {
       return null;
     }
+    const n = this.width * y + x;
     return this.cells[n];
   }
 

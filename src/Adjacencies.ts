@@ -33,7 +33,6 @@ function matchSimpleAdjacencies(adj1: SimpleAdjacency, adj2: SimpleAdjacency): b
 
 function matchDirectionalAdjacencies(adj1: DirectionalAdjacency, adj2: DirectionalAdjacency): boolean {
   // Directional adjacencies match if they are complementary
-  // console.log('Matching directional adjacencies:', adj1, adj2)
   return adj1.from === adj2.to && adj1.to === adj2.from;
 }
 
@@ -60,29 +59,21 @@ function matchCompoundAdjacencies(adj1: CompoundAdjacency, adj2: CompoundAdjacen
 
 export function matchAdjacencies(adj1: string | AdjacencyRule, adj2: string | AdjacencyRule): boolean {
 
-  // console.log('COMPARING: ', JSON.stringify(adj1), ' and ', JSON.stringify(adj2))
-
   // Parse strings into AdjacencyRules
   const rule1 = typeof adj1 === 'string' ? TileDefFactory.parseAdjacencyRule(adj1) : adj1;
   const rule2 = typeof adj2 === 'string' ? TileDefFactory.parseAdjacencyRule(adj2) : adj2;
-  // console.log({ rule1, rule2 })
 
   // First check if they're the same type
   if (isSimpleAdjacency(rule1) && isSimpleAdjacency(rule2)) {
-    // console.log("Simple")
     return matchSimpleAdjacencies(rule1, rule2);
   }
 
   if (isDirectionalAdjacency(rule1) && isDirectionalAdjacency(rule2)) {
-    // console.log("directional")
     return matchDirectionalAdjacencies(rule1, rule2);
   }
 
   if (isCompoundAdjacency(rule1) && isCompoundAdjacency(rule2)) {
-    let r = matchCompoundAdjacencies(rule1, rule2);
-    // console.log("compound")
-    // console.log('compound', {r})
-    return r
+    return matchCompoundAdjacencies(rule1, rule2);
   }
 
   // Different types never match
