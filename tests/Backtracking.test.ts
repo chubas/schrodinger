@@ -1,4 +1,4 @@
-import { WFC } from "../src/WFC";
+import { WFC, LogLevel } from "../src/WFC";
 import { SquareGrid } from "../src/Grid";
 import { TileDef } from "../src/TileDef";
 import { RandomLib } from "../src/RandomLib";
@@ -18,6 +18,12 @@ const backtrackTiles: TileDef[] = [
   {
     name: "C",
     adjacencies: ["1", "2", "1", "2"],
+    draw: () => {},
+  },
+  // Dead end tile - has a "3" adjacency that no other tile can connect to
+  {
+    name: "DeadEnd",
+    adjacencies: ["1", "2", "1", "3"],
     draw: () => {},
   },
 ];
@@ -53,34 +59,36 @@ class StepRNG implements RandomLib {
 
 describe("WFC Backtracking", () => {
   describe("Snapshot Management", () => {
-    it("should create and restore snapshots correctly", async () => {
+    it("should throw an error if the initial seed is invalid, and not attempt backtracking", async () => {
       // Create a grid that will require backtracking
       const grid = new SquareGrid(2, 2);
-      const rng = new StepRNG();
 
-      // Force a sequence that will cause a contradiction
-      // First pick tile A (all 1s) for first cell
-      // Then pick B (all 2s) for second cell, which is incompatible
-      rng.setSteps([0, 0, 0, 0.5, 0.9]); // A, B, C
+      // Start with a seed that will force a contradiction
+      // Place A (all 1s) and B (all 2s) next to each other, which is impossible
+      const initialSeed = [
+        { coords: [0, 0] as [number, number], value: backtrackTiles[0] }, // A (all 1s)
+        { coords: [1, 0] as [number, number], value: backtrackTiles[1] }, // B (all 2s)
+      ];
 
-      const wfc = new WFC(backtrackTiles, grid, {
-        random: rng,
-        maxRetries: 3 // Limit retries to speed up test
+      const wfc = new WFC(backtrackTiles, grid, { maxRetries: 3, logLevel: LogLevel.DEBUG });
+      let backtrackCalled = false;
+      wfc.on("backtrack", () => {
+        backtrackCalled = true; // This should not be called because the initial seed is invalid
       });
 
-      return new Promise<void>((resolve) => {
-        // Listen for error event which should occur when all retries are exhausted
+      const test = new Promise<void>((resolve) => {
         wfc.on("error", (error) => {
-          // If we get an error, the test passes because we expect backtracking to fail
-          // after exhausting all retries with our incompatible tiles
-          expect(error.message).toContain("uncollapsable");
+          // It should throw an error because the initial seed is invalid and there is no snapshot to backtrack to
+          console.log("Error", error);
+          expect(error).toBeDefined();
+          expect(backtrackCalled).toBe(false);
           resolve();
         });
-
-        // Start with no seed
-        wfc.start();
       });
-    }, 10000); // Increase timeout to 10 seconds
+
+      wfc.start(initialSeed);
+      await test;
+    });
   });
 
   describe("Backtracking Process", () => {
