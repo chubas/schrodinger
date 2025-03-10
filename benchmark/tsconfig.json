@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "allowSyntheticDefaultImports": true,
+    "outDir": "../dist-benchmark"
+  },
+  "include": ["./**/*.ts", "../src/**/*.ts"]
+} 

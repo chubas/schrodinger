@@ -10,6 +10,7 @@ pnpm-debug.log*
 
 # Build output
 dist/
+dist-benchmark/
 out/
 
 # Logs
@@ -37,3 +38,5 @@ coverage/
 .env
 .env.local
 .env.*.local
+
+benchmark*.json
