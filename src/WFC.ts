@@ -88,6 +88,7 @@ export class WFC extends EventEmitter {
 
   constructor(tileDefs: TileDef[], grid: Grid, options: WFCOptions = {}) {
     super();
+    this.validateTileDefs(tileDefs);
     this.tileDefs = tileDefs;
     this.#grid = grid;
     this.initializeGrid();
@@ -116,11 +117,24 @@ export class WFC extends EventEmitter {
       });
     }
   }
-  // Utility function: p
+
+  validateTileDefs(tileDefs: TileDef[]) {
+    // Throw an error if two tiles have the same name
+    const names = new Set();
+    for (const tile of tileDefs) {
+      if (names.has(tile.name)) {
+        throw new Error(`Duplicate tile name: ${tile.name}`);
+      }
+      names.add(tile.name);
+    }
+  }
+
+  // Utility function to pick a random item from an array
   pick<T>(array: T[]): T {
     let r = this.rng.random();
     let i = Math.floor(r * array.length);
-    return array[i];
+    const item = array[i];
+    return item;
   }
 
   get completed(): boolean {
@@ -286,7 +300,6 @@ export class WFC extends EventEmitter {
           }
         }
       } catch (error) {
-        console.log('The error is....', error)
         // Clean up snapshot on any error
         this.snapshots.delete(snapshotId);
         // Fatal error - restore to last known good state
@@ -724,11 +737,6 @@ export class WFC extends EventEmitter {
   ): TileDef[] {
     const valid = new Set<TileDef>();
     const oppositeDirection = this.#grid.adjacencyMap[direction];
-    // console.log('---------')
-    // this.log(LogLevel.DEBUG, `Filtering adjacencies for cell ${cell.coords} direction ${direction} (opposite: ${oppositeDirection})`);
-    // this.log(LogLevel.DEBUG, `Cell choices: ${cell.choices.map(c => c.name).join(',')}`);
-    // this.log(LogLevel.DEBUG, `Neighbor choices: ${neighbor.choices.map(c => c.name).join(',')}`);
-    // console.log('---------')
 
     // If neighbor is collapsed, we must match its adjacency
     if (neighbor.collapsed) {

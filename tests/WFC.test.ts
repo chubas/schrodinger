@@ -1,7 +1,7 @@
-import { LogLevel, WFC } from "../src/WFC";
-import { SquareGrid, Cell } from "../src/Grid";
+import { WFC } from "../src/WFC";
+import { SquareGrid } from "../src/Grid";
 import { TileDef } from "../src/TileDef";
-import { RandomLib } from "../src/RandomLib";
+import { pickTiles, DeterministicRNG } from "./util";
 
 // Mock tiles for testing
 const mockTiles: TileDef[] = [
@@ -22,25 +22,6 @@ const mockTiles: TileDef[] = [
   },
 ];
 
-// Custom RNG for deterministic tests
-class DeterministicRNG implements RandomLib {
-  private sequence: number[];
-  private currentIndex: number = 0;
-
-  constructor(sequence: number[] = [0]) {
-    this.sequence = sequence;
-  }
-
-  random(): number {
-    const value = this.sequence[this.currentIndex];
-    this.currentIndex = (this.currentIndex + 1) % this.sequence.length;
-    return value;
-  }
-
-  setSeed(_seed: string | number): void {
-    this.currentIndex = 0;
-  }
-}
 
 describe("WFC", () => {
   describe("Basic Functionality", () => {
@@ -71,6 +52,12 @@ describe("WFC", () => {
     });
   });
 
+  it('should throw an error if two tiles have the same name', () => {
+    const grid = new SquareGrid(1, 1);
+    const tiles = pickTiles(mockTiles, ['A', 'B', 'A']);
+    expect(() => new WFC(tiles, grid)).toThrow('Duplicate tile name: A');
+  });
+
   describe("RNG Integration", () => {
     it("should always pick first tile with zero-returning RNG", async () => {
       const grid = new SquareGrid(2, 2);
@@ -98,7 +85,6 @@ describe("WFC", () => {
 
       await new Promise<void>((resolve) => {
         wfc.on("collapse", (group) => {
-          console.log('Collapsing', JSON.stringify(group))
           collapses.push(group);
         });
 
@@ -121,7 +107,6 @@ describe("WFC", () => {
 
       await new Promise<void>((resolve) => {
         wfc.on("collapse", (group) => {
-          console.log('Collapsed;;;;', JSON.stringify(group))
           expect(group.cells).toHaveLength(1);
           const cell = group.cells[0];
 

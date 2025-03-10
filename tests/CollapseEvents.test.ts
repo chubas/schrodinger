@@ -1,10 +1,9 @@
 import { WFC } from "../src/WFC";
 import { SquareGrid } from "../src/Grid";
 import { TileDef } from "../src/TileDef";
-import { RandomLib } from "../src/RandomLib";
 import { CellCollapse } from "../src/WFC";
 import { LogLevel } from "../src/WFC";
-
+import { DeterministicRNG } from "./util";
 // Simple tiles that can connect to anything
 const simpleTiles: TileDef[] = [
   {
@@ -33,26 +32,11 @@ const chessTiles: TileDef[] = [
   },
 ];
 
-// Controlled RNG for predictable tests
-class TestRNG implements RandomLib {
-  private value: number;
-
-  constructor(value: number = 0) {
-    this.value = value;
-  }
-
-  random(): number {
-    return this.value;
-  }
-
-  setSeed(_seed: string | number): void {}
-}
-
 describe("WFC Collapse Events", () => {
   describe("Simple Grid Collapses", () => {
     it("should emit exactly one collapse event for 1x1 grid without seed", async () => {
       const grid = new SquareGrid(1, 1);
-      const wfc = new WFC(simpleTiles, grid, { random: new TestRNG(0) });
+      const wfc = new WFC(simpleTiles, grid, { random: new DeterministicRNG([0]) });
 
       let collapseCount = 0;
       await new Promise<void>((resolve) => {
@@ -94,7 +78,7 @@ describe("WFC Collapse Events", () => {
 
     it("should emit four collapse events for 2x2 grid with independent tiles", async () => {
       const grid = new SquareGrid(2, 2);
-      const wfc = new WFC(simpleTiles, grid, { random: new TestRNG(0) });
+      const wfc = new WFC(simpleTiles, grid, { random: new DeterministicRNG([0]) });
 
       let collapseCount = 0;
       const collapsedCells = new Set<string>();
@@ -122,7 +106,7 @@ describe("WFC Collapse Events", () => {
 
     it("should emit three collapse events for 2x2 grid with 2-cell seed", async () => {
       const grid = new SquareGrid(2, 2);
-      const wfc = new WFC(simpleTiles, grid, { random: new TestRNG(0) });
+      const wfc = new WFC(simpleTiles, grid, { random: new DeterministicRNG([0]) });
 
       let collapseCount = 0;
       const collapsedCells = new Set<string>();
@@ -161,9 +145,9 @@ describe("WFC Collapse Events", () => {
   });
 
   describe("Chess Pattern Collapses", () => {
-    it("should emit one collapse event for 2x2 grid without seed CHESSTEST", async () => {
+    it("should emit one collapse event for 2x2 grid without seed", async () => {
       const grid = new SquareGrid(2, 2);
-      const wfc = new WFC(chessTiles, grid, { random: new TestRNG(0), logLevel: LogLevel.DEBUG });
+      const wfc = new WFC(chessTiles, grid, { random: new DeterministicRNG([0]) });
 
       let collapseCount = 0;
       await new Promise<void>((resolve) => {
@@ -255,7 +239,7 @@ describe("WFC Collapse Events", () => {
 
     it("should emit one collapse event for 2x2 grid with 2-cell seed", async () => {
       const grid = new SquareGrid(2, 2);
-      const wfc = new WFC(chessTiles, grid, { logLevel: LogLevel.DEBUG });
+      const wfc = new WFC(chessTiles, grid);
 
       let collapseCount = 0;
       await new Promise<void>((resolve) => {
