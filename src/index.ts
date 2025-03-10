@@ -91,7 +91,6 @@ console.log("Initial seed:", r);
 
 const random = new SeedRandom(r);
 
-
 const chessTiles: TileDef[] = [
   {
     name: "White",

@@ -89,8 +89,8 @@ export class SquareGrid implements Grid<[number, number]> {
   getNeighbors(coords: [number, number]): (Cell | null)[] {
     const deltas = [
       [0, -1], // Top
-      [1, 0],  // Right
-      [0, 1],  // Bottom
+      [1, 0], // Right
+      [0, 1], // Bottom
       [-1, 0], // Left
     ];
     const [x, y] = coords;

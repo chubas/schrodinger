@@ -131,8 +131,8 @@ export class WFC extends EventEmitter {
 
   // Utility function to pick a random item from an array
   pick<T>(array: T[]): T {
-    let r = this.rng.random();
-    let i = Math.floor(r * array.length);
+    const r = this.rng.random();
+    const i = Math.floor(r * array.length);
     const item = array[i];
     return item;
   }
@@ -152,7 +152,10 @@ export class WFC extends EventEmitter {
     try {
       if (initialSeed && initialSeed.length > 0) {
         this.log(LogLevel.DEBUG, "Starting with initial seed");
-        this.log(LogLevel.DEBUG, `Seed cells: ${initialSeed.map(c => `${c.coords}=${c.value?.name}`).join(', ')}`);
+        this.log(
+          LogLevel.DEBUG,
+          `Seed cells: ${initialSeed.map((c) => `${c.coords}=${c.value?.name}`).join(", ")}`,
+        );
 
         // Create a snapshot before applying the seed
         const snapshotId = this.takeSnapshot();
@@ -161,10 +164,12 @@ export class WFC extends EventEmitter {
           // Apply the seed and check for forced collapses
           const result = this.collapseGroupWithValues(
             { cells: initialSeed, cause: "initial" },
-            new Map(initialSeed.map(cell => [
-              `${cell.coords[0]},${cell.coords[1]}`,
-              cell.value!
-            ]))
+            new Map(
+              initialSeed.map((cell) => [
+                `${cell.coords[0]},${cell.coords[1]}`,
+                cell.value!,
+              ]),
+            ),
           );
 
           if (!result.success) {
@@ -189,7 +194,10 @@ export class WFC extends EventEmitter {
             .filter((cell) => !cell.collapsed);
           if (uncollapsed.length > 0) {
             const lowestEntropy = this.getLowestEntropyTile(uncollapsed);
-            this.log(LogLevel.DEBUG, `Adding entropy-based collapse for cell ${lowestEntropy.coords}`);
+            this.log(
+              LogLevel.DEBUG,
+              `Adding entropy-based collapse for cell ${lowestEntropy.coords}`,
+            );
             this.collapseQueue.push({
               cells: [
                 {
@@ -209,7 +217,10 @@ export class WFC extends EventEmitter {
           .filter((cell) => !cell.collapsed);
         if (uncollapsed.length > 0) {
           const lowestEntropy = this.getLowestEntropyTile(uncollapsed);
-          this.log(LogLevel.DEBUG, `Selected initial cell ${lowestEntropy.coords} with choices: ${lowestEntropy.choices.map(c => c.name).join(',')}`);
+          this.log(
+            LogLevel.DEBUG,
+            `Selected initial cell ${lowestEntropy.coords} with choices: ${lowestEntropy.choices.map((c) => c.name).join(",")}`,
+          );
           this.collapseQueue.push({
             cells: [
               {
@@ -336,7 +347,7 @@ export class WFC extends EventEmitter {
       // If we failed but have more attempts, continue to next iteration
       this.log(
         LogLevel.DEBUG,
-        `Attempt ${state.attempts}/${maxAttempts} failed, will retry if attempts remain`
+        `Attempt ${state.attempts}/${maxAttempts} failed, will retry if attempts remain`,
       );
     }
 
@@ -355,7 +366,7 @@ export class WFC extends EventEmitter {
       if (!this.hasExhaustedAllChoices(currentState)) {
         this.log(
           LogLevel.INFO,
-          `Found valid backtrack state at depth ${backtrackDepth}`
+          `Found valid backtrack state at depth ${backtrackDepth}`,
         );
 
         // Restore to this state and try again
@@ -439,10 +450,18 @@ export class WFC extends EventEmitter {
     const forcedCollapses: CellCollapse[] = [];
 
     this.log(LogLevel.DEBUG, "Starting collapse group validation");
-    this.log(LogLevel.DEBUG, `Selected values: ${Array.from(selectedValues.entries()).map(([k,v]) => `${k}=${v.name}`).join(', ')}`);
+    this.log(
+      LogLevel.DEBUG,
+      `Selected values: ${Array.from(selectedValues.entries())
+        .map(([k, v]) => `${k}=${v.name}`)
+        .join(", ")}`,
+    );
 
     // First pass: validate that all cells in the group can coexist
-    this.log(LogLevel.DEBUG, "🔍 First pass: validating and selecting values for collapse")
+    this.log(
+      LogLevel.DEBUG,
+      "🔍 First pass: validating and selecting values for collapse",
+    );
     for (const cellCollapse of group.cells) {
       const cell = this.#grid.get(cellCollapse.coords);
       if (!cell) continue;
@@ -450,8 +469,14 @@ export class WFC extends EventEmitter {
       const coordKey = `${cellCollapse.coords[0]},${cellCollapse.coords[1]}`;
       const value = selectedValues.get(coordKey)!;
 
-      this.log(LogLevel.DEBUG, `Validating cell at ${coordKey} with value ${value.name}`);
-      this.log(LogLevel.DEBUG, `Cell adjacencies: ${value.adjacencies.map(a => JSON.stringify(a)).join(', ')}`);
+      this.log(
+        LogLevel.DEBUG,
+        `Validating cell at ${coordKey} with value ${value.name}`,
+      );
+      this.log(
+        LogLevel.DEBUG,
+        `Cell adjacencies: ${value.adjacencies.map((a) => JSON.stringify(a)).join(", ")}`,
+      );
 
       // Check if this value is compatible with all neighbors that are already collapsed
       // or are part of the group
@@ -461,29 +486,50 @@ export class WFC extends EventEmitter {
         if (!neighbor) continue;
 
         const neighborCoordKey = `${neighbor.coords[0]},${neighbor.coords[1]}`;
-        const neighborValue = selectedValues.get(neighborCoordKey) || (neighbor.collapsed ? neighbor.choices[0] : undefined);
+        const neighborValue =
+          selectedValues.get(neighborCoordKey) ||
+          (neighbor.collapsed ? neighbor.choices[0] : undefined);
 
-        this.log(LogLevel.DEBUG, `Checking neighbor at ${neighborCoordKey}: ${neighborValue?.name}`);
+        this.log(
+          LogLevel.DEBUG,
+          `Checking neighbor at ${neighborCoordKey}: ${neighborValue?.name}`,
+        );
 
         if (neighborValue) {
           // Get the adjacency rules for this direction
           const cellAdjacency = value.adjacencies[i];
           // Get the opposite direction's adjacency rule from the neighbor
-          const neighborAdjacency = neighborValue.adjacencies[this.#grid.adjacencyMap[i]];
+          const neighborAdjacency =
+            neighborValue.adjacencies[this.#grid.adjacencyMap[i]];
 
-          this.log(LogLevel.DEBUG, `Direction ${i} -> ${this.#grid.adjacencyMap[i]}`);
-          this.log(LogLevel.DEBUG, `Cell adjacency: ${JSON.stringify(cellAdjacency)}`);
-          this.log(LogLevel.DEBUG, `Neighbor adjacency: ${JSON.stringify(neighborAdjacency)}`);
+          this.log(
+            LogLevel.DEBUG,
+            `Direction ${i} -> ${this.#grid.adjacencyMap[i]}`,
+          );
+          this.log(
+            LogLevel.DEBUG,
+            `Cell adjacency: ${JSON.stringify(cellAdjacency)}`,
+          );
+          this.log(
+            LogLevel.DEBUG,
+            `Neighbor adjacency: ${JSON.stringify(neighborAdjacency)}`,
+          );
 
           if (!matchAdjacencies(cellAdjacency, neighborAdjacency)) {
-            this.log(LogLevel.DEBUG, "Adjacencies do not match - collapse group is invalid");
+            this.log(
+              LogLevel.DEBUG,
+              "Adjacencies do not match - collapse group is invalid",
+            );
             return { success: false, affectedCells };
           }
         }
       }
     }
 
-    this.log(LogLevel.DEBUG, `🎳 Second pass - collapsing group: ${JSON.stringify(group.cells)}`)
+    this.log(
+      LogLevel.DEBUG,
+      `🎳 Second pass - collapsing group: ${JSON.stringify(group.cells)}`,
+    );
     // Second pass: collapse all cells in the group
     for (const cellCollapse of group.cells) {
       const cell = this.#grid.get(cellCollapse.coords);
@@ -508,7 +554,10 @@ export class WFC extends EventEmitter {
     }
 
     // Third pass: propagate from all collapsed cells
-    this.log(LogLevel.DEBUG, `💥Third pass: propagating collapse for: ${JSON.stringify(affectedCells)}`)
+    this.log(
+      LogLevel.DEBUG,
+      `💥Third pass: propagating collapse for: ${JSON.stringify(affectedCells)}`,
+    );
     this.propagationQueue.clear();
     for (const cell of affectedCells) {
       this.queueNeighborsForPropagation(cell);
@@ -520,18 +569,27 @@ export class WFC extends EventEmitter {
       if (!currentCell) continue; // TypeScript safety
 
       this.propagationQueue.delete(currentCell);
-      this.log(LogLevel.DEBUG, ` 🦋 Propagating from ${currentCell.coords}, cell: ${JSON.stringify(currentCell)}`)
+      this.log(
+        LogLevel.DEBUG,
+        ` 🦋 Propagating from ${currentCell.coords}, cell: ${JSON.stringify(currentCell)}`,
+      );
       const originalChoices = [...currentCell.choices];
       const neighbors = this.#grid.getNeighbors(currentCell.coords);
 
-      this.log(LogLevel.DEBUG, `  🏘️ Neighbors of ${currentCell.coords}: ${neighbors.map(n => n ? n.coords : '').join(', ')}`)
+      this.log(
+        LogLevel.DEBUG,
+        `  🏘️ Neighbors of ${currentCell.coords}: ${neighbors.map((n) => (n ? n.coords : "")).join(", ")}`,
+      );
 
       // Update choices based on all neighbors
       for (let i = 0; i < neighbors.length; i++) {
         const neighbor = neighbors[i];
         if (!neighbor) continue;
 
-        this.log(LogLevel.DEBUG, `   >>>> Will filter valid adjacencies for cell ${currentCell.coords} against neighbor ${neighbor.coords}`)
+        this.log(
+          LogLevel.DEBUG,
+          `   >>>> Will filter valid adjacencies for cell ${currentCell.coords} against neighbor ${neighbor.coords}`,
+        );
         const validChoices = this.filterValidAdjacencies(
           currentCell,
           neighbor,
@@ -567,7 +625,10 @@ export class WFC extends EventEmitter {
 
         // If only one choice left, add to forced collapses
         if (currentCell.choices.length === 1 && !currentCell.collapsed) {
-          this.log(LogLevel.DEBUG, `🧱 Forcing collapse on ${JSON.stringify(currentCell)}, enqueueing`)
+          this.log(
+            LogLevel.DEBUG,
+            `🧱 Forcing collapse on ${JSON.stringify(currentCell)}, enqueueing`,
+          );
           currentCell.collapsed = true;
           forcedCollapses.push({
             coords: currentCell.coords,
@@ -575,14 +636,17 @@ export class WFC extends EventEmitter {
           });
           this.queueNeighborsForPropagation(currentCell);
         } else {
-          this.log(LogLevel.DEBUG, `⛱️ No propagation occured for ${currentCell.coords}`)
+          this.log(
+            LogLevel.DEBUG,
+            `⛱️ No propagation occured for ${currentCell.coords}`,
+          );
           this.queueNeighborsForPropagation(currentCell);
         }
       }
     }
 
     // Emit a single collapse event with all cells (initial + forced)
-    const allCollapses = [...group.cells].map(cellCollapse => {
+    const allCollapses = [...group.cells].map((cellCollapse) => {
       const coordKey = `${cellCollapse.coords[0]},${cellCollapse.coords[1]}`;
       const value = selectedValues.get(coordKey);
       if (!value) {
@@ -590,7 +654,7 @@ export class WFC extends EventEmitter {
       }
       return {
         coords: cellCollapse.coords,
-        value
+        value,
       };
     });
 
@@ -600,7 +664,7 @@ export class WFC extends EventEmitter {
       }
       allCollapses.push({
         coords: forced.coords,
-        value: forced.value
+        value: forced.value,
       });
     }
 
@@ -617,7 +681,10 @@ export class WFC extends EventEmitter {
 
   private queueNeighborsForPropagation(cell: Cell): void {
     const neighbors = this.#grid.getNeighbors(cell.coords);
-    this.log(LogLevel.DEBUG, `  🏘️ Neighbors of ${cell.coords}: ${neighbors.map(n => n ? n.coords : '').join(', ')}`);
+    this.log(
+      LogLevel.DEBUG,
+      `  🏘️ Neighbors of ${cell.coords}: ${neighbors.map((n) => (n ? n.coords : "")).join(", ")}`,
+    );
 
     for (const neighbor of neighbors) {
       if (neighbor && !neighbor.collapsed) {
@@ -649,17 +716,14 @@ export class WFC extends EventEmitter {
 
   private debugGridState() {
     const iterator = this.#grid.iterate();
-    let str = [];
+    const str = [];
     for (const [cell, coords] of iterator) {
       // this.log(
-        // LogLevel.DEBUG,
-        str.push(`[${coords}]: ${cell.choices.map((c) => c.name).join(",")}`)
+      // LogLevel.DEBUG,
+      str.push(`[${coords}]: ${cell.choices.map((c) => c.name).join(",")}`);
       // );
     }
-    this.log(
-      LogLevel.DEBUG,
-      str.join("\n")
-    )
+    this.log(LogLevel.DEBUG, str.join("\n"));
   }
 
   // Return the tile with the least amount of possible tile definitions.
@@ -740,25 +804,35 @@ export class WFC extends EventEmitter {
 
     // If neighbor is collapsed, we must match its adjacency
     if (neighbor.collapsed) {
-      this.log(LogLevel.DEBUG, ` 🤔 Comparing against collapsed neighbor ${neighbor.coords}`);
-      const neighborAdjacency = neighbor.choices[0].adjacencies[oppositeDirection];
+      this.log(
+        LogLevel.DEBUG,
+        ` 🤔 Comparing against collapsed neighbor ${neighbor.coords}`,
+      );
+      const neighborAdjacency =
+        neighbor.choices[0].adjacencies[oppositeDirection];
       // this.log(LogLevel.DEBUG, `Neighbor adjacency at ${oppositeDirection}: ${JSON.stringify(neighborAdjacency)}`);
       for (const option of cell.choices) {
         // this.log(LogLevel.DEBUG, `Checking cell option ${option.name} adjacency at ${direction}: ${JSON.stringify(option.adjacencies[direction])}`);
-        if (matchAdjacencies(option.adjacencies[direction], neighborAdjacency)) {
+        if (
+          matchAdjacencies(option.adjacencies[direction], neighborAdjacency)
+        ) {
           valid.add(option);
           // this.log(LogLevel.DEBUG, `Added ${option.name} as valid option`);
         }
       }
     } else {
       // Otherwise, check all possible combinations
-      this.log(LogLevel.DEBUG, ` 🤔 Checking all combinations for cell ${cell.coords} against neighbor ${neighbor.coords}`);
+      this.log(
+        LogLevel.DEBUG,
+        ` 🤔 Checking all combinations for cell ${cell.coords} against neighbor ${neighbor.coords}`,
+      );
       for (const option of cell.choices) {
         const optionAdjacency = option.adjacencies[direction];
         // this.log(LogLevel.DEBUG, `Cell option ${option.name} adjacency at ${direction}: ${JSON.stringify(optionAdjacency)}`);
 
         for (const neighborOption of neighbor.choices) {
-          const neighborAdjacency = neighborOption.adjacencies[oppositeDirection];
+          const neighborAdjacency =
+            neighborOption.adjacencies[oppositeDirection];
           // this.log(LogLevel.DEBUG, `Neighbor option ${neighborOption.name} adjacency at ${oppositeDirection}: ${JSON.stringify(neighborAdjacency)}`);
 
           // Tiles can connect if their adjacencies match
@@ -772,7 +846,10 @@ export class WFC extends EventEmitter {
     }
 
     const result = Array.from(valid);
-    this.log(LogLevel.DEBUG, ` ➡️ Valid options for cell ${cell.coords}: ${result.map(r => r.name).join(',')}`);
+    this.log(
+      LogLevel.DEBUG,
+      ` ➡️ Valid options for cell ${cell.coords}: ${result.map((r) => r.name).join(",")}`,
+    );
     return result;
   }
 
@@ -807,12 +884,12 @@ export class WFC extends EventEmitter {
       if (!snapshot) return true; // If no snapshot, consider exhausted
 
       const snapshotCell = snapshot.cells.find(
-        c => c.coords[0] === cell.coords[0] && c.coords[1] === cell.coords[1]
+        (c) => c.coords[0] === cell.coords[0] && c.coords[1] === cell.coords[1],
       );
       if (!snapshotCell) return true;
 
       // If there are any untried choices from the snapshot state, we haven't exhausted all possibilities
-      if (snapshotCell.choices.some(choice => !tried.has(choice))) {
+      if (snapshotCell.choices.some((choice) => !tried.has(choice))) {
         return false;
       }
     }

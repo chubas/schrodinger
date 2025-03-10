@@ -9,34 +9,48 @@ export type DirectionalAdjacency = {
 
 export type CompoundAdjacency = (string | DirectionalAdjacency)[];
 
-export type AdjacencyRule = SimpleAdjacency | DirectionalAdjacency | CompoundAdjacency;
+export type AdjacencyRule =
+  | SimpleAdjacency
+  | DirectionalAdjacency
+  | CompoundAdjacency;
 
 function isSimpleAdjacency(adj: AdjacencyRule): adj is SimpleAdjacency {
-  return Array.isArray(adj) && adj.every(item => typeof item === 'string');
+  return Array.isArray(adj) && adj.every((item) => typeof item === "string");
 }
 
-function isDirectionalAdjacency(adj: AdjacencyRule): adj is DirectionalAdjacency {
-  return !Array.isArray(adj) && 'from' in adj && 'to' in adj;
+function isDirectionalAdjacency(
+  adj: AdjacencyRule,
+): adj is DirectionalAdjacency {
+  return !Array.isArray(adj) && "from" in adj && "to" in adj;
 }
 
 function isCompoundAdjacency(adj: AdjacencyRule): adj is CompoundAdjacency {
-  return Array.isArray(adj) && adj.some(item => typeof item !== 'string');
+  return Array.isArray(adj) && adj.some((item) => typeof item !== "string");
 }
 
-function matchSimpleAdjacencies(adj1: SimpleAdjacency, adj2: SimpleAdjacency): boolean {
+function matchSimpleAdjacencies(
+  adj1: SimpleAdjacency,
+  adj2: SimpleAdjacency,
+): boolean {
   // For simple adjacencies, all tokens must match (order doesn't matter)
   if (adj1.length !== adj2.length) return false;
 
   const tokens1 = new Set(adj1);
-  return adj2.every(token => tokens1.has(token));
+  return adj2.every((token) => tokens1.has(token));
 }
 
-function matchDirectionalAdjacencies(adj1: DirectionalAdjacency, adj2: DirectionalAdjacency): boolean {
+function matchDirectionalAdjacencies(
+  adj1: DirectionalAdjacency,
+  adj2: DirectionalAdjacency,
+): boolean {
   // Directional adjacencies match if they are complementary
   return adj1.from === adj2.to && adj1.to === adj2.from;
 }
 
-function matchCompoundAdjacencies(adj1: CompoundAdjacency, adj2: CompoundAdjacency): boolean {
+function matchCompoundAdjacencies(
+  adj1: CompoundAdjacency,
+  adj2: CompoundAdjacency,
+): boolean {
   if (adj1.length !== adj2.length) return false;
   // For each position, if both are strings they must match exactly
   // If both are directional, they must be complementary
@@ -45,9 +59,9 @@ function matchCompoundAdjacencies(adj1: CompoundAdjacency, adj2: CompoundAdjacen
     const item1 = adj1[i];
     const item2 = adj2[i];
 
-    if (typeof item1 === 'string' && typeof item2 === 'string') {
+    if (typeof item1 === "string" && typeof item2 === "string") {
       if (item1 !== item2) return false;
-    } else if (typeof item1 === 'object' && typeof item2 === 'object') {
+    } else if (typeof item1 === "object" && typeof item2 === "object") {
       if (!matchDirectionalAdjacencies(item1, item2)) return false;
     } else {
       return false;
@@ -57,11 +71,15 @@ function matchCompoundAdjacencies(adj1: CompoundAdjacency, adj2: CompoundAdjacen
   return true;
 }
 
-export function matchAdjacencies(adj1: string | AdjacencyRule, adj2: string | AdjacencyRule): boolean {
-
+export function matchAdjacencies(
+  adj1: string | AdjacencyRule,
+  adj2: string | AdjacencyRule,
+): boolean {
   // Parse strings into AdjacencyRules
-  const rule1 = typeof adj1 === 'string' ? TileDefFactory.parseAdjacencyRule(adj1) : adj1;
-  const rule2 = typeof adj2 === 'string' ? TileDefFactory.parseAdjacencyRule(adj2) : adj2;
+  const rule1 =
+    typeof adj1 === "string" ? TileDefFactory.parseAdjacencyRule(adj1) : adj1;
+  const rule2 =
+    typeof adj2 === "string" ? TileDefFactory.parseAdjacencyRule(adj2) : adj2;
 
   // First check if they're the same type
   if (isSimpleAdjacency(rule1) && isSimpleAdjacency(rule2)) {

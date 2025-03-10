@@ -1,4 +1,7 @@
-import { AdjacencyRule, DirectionalAdjacency, CompoundAdjacency } from "./Adjacencies";
+import {
+  AdjacencyRule,
+  DirectionalAdjacency,
+} from "./Adjacencies";
 
 export type TileDef = {
   /**
@@ -25,8 +28,8 @@ export class TileDefFactory {
   static defineTile(tile: Partial<TileDef>): TileDef {
     return {
       name: tile.name ?? "",
-      adjacencies: (tile.adjacencies ?? []).map(adj =>
-        typeof adj === 'string' ? this.parseAdjacencyRule(adj) : adj
+      adjacencies: (tile.adjacencies ?? []).map((adj) =>
+        typeof adj === "string" ? this.parseAdjacencyRule(adj) : adj,
       ),
       rotation: tile.rotation ?? 0,
       reflection: tile.reflection ?? 0,
@@ -41,11 +44,11 @@ export class TileDefFactory {
 
     // Split by | to get each side's adjacency
     const sides = adjacencyString.split("|");
-    if (sides.some(s => !s)) {
+    if (sides.some((s) => !s)) {
       throw new Error("Empty adjacency definition");
     }
 
-    return sides.map(side => this.parseAdjacencyRule(side.trim()));
+    return sides.map((side) => this.parseAdjacencyRule(side.trim()));
   }
 
   static parseAdjacencyRule(rule: string): AdjacencyRule {
@@ -71,7 +74,7 @@ export class TileDefFactory {
       return [
         ...(left ? this.tokenizeSimpleAdjacency(left) : []),
         { from: from.trim(), to: to.trim() } as DirectionalAdjacency,
-        ...(right ? this.tokenizeSimpleAdjacency(right) : [])
+        ...(right ? this.tokenizeSimpleAdjacency(right) : []),
       ];
     }
 
@@ -133,6 +136,6 @@ export class TileDefFactory {
       }
     }
 
-    return tokens.map(t => t.trim()).filter(t => t);
+    return tokens.map((t) => t.trim()).filter((t) => t);
   }
 }
