@@ -11,7 +11,11 @@
     "format": "prettier --write \"src/**/*.ts\"",
     "lint": "eslint \"src/**/*.ts\" --max-warnings=0",
     "lint:fix": "eslint \"src/**/*.ts\" --fix",
-    "test": "jest"
+    "test": "jest",
+    "benchmark": "node benchmark/benchmark.js",
+    "benchmark:basic": "node benchmark/benchmark.js --width 5 --height 5 --tiles 3 --repeat 1",
+    "benchmark:standard": "node benchmark/benchmark.js --width 20 --height 20 --tiles 8 --repeat 3",
+    "benchmark:compare": "node benchmark/compare.js"
   },
   "author": "Rubén Medellín",
   "license": "ISC",
