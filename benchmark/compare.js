@@ -10,10 +10,25 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Parse command line arguments
 const args = process.argv.slice(2);
-const historyFile = args[0] || path.join(__dirname, 'benchmark-results.json');
-const limit = args.includes('--limit') ? parseInt(args[args.indexOf('--limit') + 1], 10) : 10;
+let historyFile = path.join(__dirname, 'benchmark-results.json');
+let limit = 10;
 
-if (args.includes('--help')) {
+// Process arguments
+for (let i = 0; i < args.length; i++) {
+  const arg = args[i];
+  
+  if (arg === '--limit' && i + 1 < args.length) {
+    limit = parseInt(args[++i], 10);
+  } else if (arg === '--help') {
+    printHelp();
+    process.exit(0);
+  } else if (!arg.startsWith('--') && i === 0) {
+    // First non-flag argument is assumed to be the history file
+    historyFile = arg;
+  }
+}
+
+function printHelp() {
   console.log(`
 WFC Benchmark Results Comparison
 
@@ -24,10 +39,14 @@ Options:
   --limit <number>   Maximum number of runs to display per configuration (default: 10)
   --help             Show this help
 
+Metrics compared:
+  - Execution time (ms)
+  - Memory usage (heap size)
+  - Collapses, and backtracks
+  
 Example:
   node benchmark/compare.js benchmark-results.json --limit 5
 `);
-  process.exit(0);
 }
 
 // Format a timestamp to a readable string
@@ -37,9 +56,17 @@ function formatTimestamp(timestamp) {
 
 // Format file size in a human-readable way
 function formatBytes(bytes) {
-  if (bytes < 1024) return bytes + ' B';
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
-  return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+  if (bytes === undefined || bytes === null) return 'N/A';
+  
+  const isNegative = bytes < 0;
+  const absBytes = Math.abs(bytes);
+  let formattedValue;
+  
+  if (absBytes < 1024) formattedValue = absBytes.toFixed(2) + ' B';
+  else if (absBytes < 1024 * 1024) formattedValue = (absBytes / 1024).toFixed(2) + ' KB';
+  else formattedValue = (absBytes / (1024 * 1024)).toFixed(2) + ' MB';
+  
+  return isNegative ? '-' + formattedValue : formattedValue;
 }
 
 // Calculate percentage change between two values
@@ -74,19 +101,24 @@ function displaySingleRun(run) {
   console.log(`Run timestamp: ${formatTimestamp(run.timestamp)}`);
   console.log(`Success: ${run.results.success ? 'Yes' : 'No'}`);
   console.log(`Execution time: ${run.results.executionTime.toFixed(2)}ms`);
+  
+  // Display memory usage if available
+  console.log(`Memory increase: ${formatBytes(run.results.memory.diff.heapUsed)}`);
+  console.log(`Total heap: ${formatBytes(run.results.memory.after.heapUsed)}`);
+  
   console.log(`Collapses: ${run.results.collapses}`);
-  console.log(`Propagations: ${run.results.propagations}`);
   console.log(`Backtracks: ${run.results.backtracks}`);
 }
 
 // Compare multiple benchmark runs
 function displayRunComparison(runs) {
+  // Check if memory metrics are available in ANY of the runs
   const headers = [
     'Timestamp', 
     'Success', 
-    'Exec Time (ms)', 
+    'Exec Time (ms)',
+    'Memory Increase',
     'Collapses',
-    'Propagations',
     'Backtracks'
   ];
   
@@ -94,8 +126,8 @@ function displayRunComparison(runs) {
     formatTimestamp(run.timestamp).split(',')[0], // Just date part
     run.results.success ? '✓' : '✗',
     run.results.executionTime.toFixed(2),
+    formatBytes(run.results.memory.diff.heapUsed),
     run.results.collapses.toString(),
-    run.results.propagations.toString(),
     run.results.backtracks.toString()
   ]);
   
@@ -111,9 +143,12 @@ function displayTrends(runs) {
   const timeChange = percentChange(first.results.executionTime, last.results.executionTime);
   const collapsesChange = percentChange(first.results.collapses, last.results.collapses);
   const backtracksChange = percentChange(first.results.backtracks, last.results.backtracks);
+  const memoryChange = percentChange(first.results.memory.diff.heapUsed, last.results.memory.diff.heapUsed);
+  const memoryDetails = ` (${formatBytes(first.results.memory.diff.heapUsed)} → ${formatBytes(last.results.memory.diff.heapUsed)})`;
   
   console.log('\nTrends:');
   console.log(`Execution time: ${timeChange} (${first.results.executionTime.toFixed(2)}ms → ${last.results.executionTime.toFixed(2)}ms)`);
+  console.log(`Memory usage: ${memoryChange}${memoryDetails}`);
   console.log(`Collapses: ${collapsesChange} (${first.results.collapses} → ${last.results.collapses})`);
   console.log(`Backtracks: ${backtracksChange} (${first.results.backtracks} → ${last.results.backtracks})`);
   
@@ -122,6 +157,13 @@ function displayTrends(runs) {
     console.log('⚠️ Performance has degraded significantly');
   } else if (last.results.executionTime < first.results.executionTime * 0.8) {
     console.log('✅ Performance has improved significantly');
+  }
+  
+  // Check memory trends if available
+  if (last.results.memory.diff.heapUsed > first.results.memory.diff.heapUsed * 1.2) {
+    console.log('⚠️ Memory usage has increased significantly');
+  } else if (last.results.memory.diff.heapUsed < first.results.memory.diff.heapUsed * 0.8) {
+    console.log('✅ Memory usage has decreased significantly');
   }
   
   if (last.results.backtracks > first.results.backtracks * 1.2) {
@@ -141,7 +183,7 @@ function compareBenchmarks(historyFile, limit = 10) {
   
   const history = JSON.parse(fs.readFileSync(historyFile, 'utf8'));
   
-  if (!history.runs || history.runs.length === 0) {
+  if (!history || history.length === 0) {
     console.error('No benchmark data found in history file');
     return;
   }
@@ -149,7 +191,7 @@ function compareBenchmarks(historyFile, limit = 10) {
   // Group runs by configuration
   const configurations = new Map();
   
-  for (const run of history.runs) {
+  for (const run of history) {
     const config = `${run.config.gridWidth}x${run.config.gridHeight}x${run.config.numTileTypes}`;
     if (!configurations.has(config)) {
       configurations.set(config, []);
@@ -162,8 +204,15 @@ function compareBenchmarks(historyFile, limit = 10) {
     runs.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   }
   
+  // Filter configurations to only those with memory metrics if requested
+  const configsToShow = [...configurations.entries()];
+  let filteredConfigs = configsToShow;
+  
+  let configCount = 0;
+  
   // Display results for each configuration
-  for (const [config, runs] of configurations) {
+  for (const [config, runs] of filteredConfigs) {
+    configCount++;
     const [width, height, tiles] = config.split('x').map(Number);
     console.log(`\n========== Configuration: ${width}x${height} grid with ${tiles} tile types ==========`);
     
@@ -181,6 +230,10 @@ function compareBenchmarks(historyFile, limit = 10) {
     if (runsToShow.length >= 3) {
       displayTrends(runsToShow);
     }
+  }
+  
+  if (configCount === 0) {
+    console.log('No configurations found that match the criteria.');
   }
 }
 

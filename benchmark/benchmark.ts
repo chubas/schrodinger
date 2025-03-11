@@ -3,7 +3,7 @@
  *
  * This script:
  * 1. Uses the real WFC implementation from source
- * 2. Measures execution time and operation counts
+ * 2. Measures execution time, memory usage, and operation counts
  * 3. Saves results to a file
  */
 
@@ -53,7 +53,7 @@ for (let i = 0; i < args.length; i++) {
 WFC Algorithm Benchmark (TypeScript Version)
 
 Usage:
-  npm run benchmark:ts -- [options]
+  npm run benchmark -- [options]
 
 Options:
   --width <number>         Grid width (default: 20)
@@ -65,12 +65,17 @@ Options:
   --verbose                Enable verbose logging
   --help                   Show this help
 
+Metrics measured:
+  - Execution time (ms)
+  - Memory usage (heap allocated)
+  - Number of collapses, and backtracks
+
 Example:
   # Run benchmark with a 30x30 grid and 10 tile types
-  npm run benchmark:ts -- --width 30 --height 30 --tiles 10
+  npm run benchmark -- --width 30 --height 30 --tiles 10
 
   # Run benchmark with tiles from a file
-  npm run benchmark:ts -- --width 30 --height 30 --tiles-file ./benchmark/tiles/complex-tiles.json
+  npm run benchmark -- --width 30 --height 30 --tiles-file ./benchmark/tiles/complex-tiles.json
 `);
     process.exit(0);
   }
@@ -121,9 +126,35 @@ function loadTilesFromFile(filePath: string): TileDef[] {
   }
 }
 
+/**
+ * Format memory usage in a human-readable format
+ * @param bytes The number of bytes
+ * @returns Formatted string (e.g., "1.23 MB")
+ */
+function formatMemory(bytes: number): string {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+}
+
+/**
+ * Get detailed memory usage from Node.js process
+ * @returns Object with memory usage metrics
+ */
+function getMemoryUsage() {
+  const memoryUsage = process.memoryUsage();
+  return {
+    rss: memoryUsage.rss, // Resident Set Size - total memory allocated for the process execution
+    heapTotal: memoryUsage.heapTotal, // V8's memory usage
+    heapUsed: memoryUsage.heapUsed, // Actual memory used during execution
+    external: memoryUsage.external, // Memory used by C++ objects bound to JavaScript objects
+    arrayBuffers: memoryUsage.arrayBuffers || 0 // Memory used by ArrayBuffers and SharedArrayBuffers
+  };
+}
+
 // Benchmark function
-async function runBenchmark() {
-  const results = [];
+async function runBenchmark(): Promise<boolean> {
+  const results: any[] = [];
 
   if (tilesFile) {
     console.log(`Running ${repeat} benchmarks with grid size ${gridWidth}x${gridHeight}, tiles from ${tilesFile}`);
@@ -181,29 +212,21 @@ async function runBenchmark() {
 
     // Track metrics
     let collapses = 0;
-    let propagations = 0;
     let backtracks = 0;
 
     wfc.on('collapse', () => {
       collapses++;
     });
 
-    wfc.on('propagate', () => {
-      propagations++;
-      if (verbose) {
-        console.log('Propagation event received');
-      }
-    });
-
     wfc.on('backtrack', () => {
       backtracks++;
     });
-
-    wfc.on('complete', () => {
-      for (let [cell, coords] of wfc.iterate()) {
-        console.log(`${coords}: ${cell.choices.map(c => c.name).join(', ')}`);
-      }
-    });
+    
+    // Measure memory before WFC execution
+    const memoryBefore = getMemoryUsage();
+    if (verbose) {
+      console.log('Memory before execution:', formatMemory(memoryBefore.heapUsed));
+    }
 
     // Run the WFC algorithm and measure execution time
     const startTime = performance.now();
@@ -228,6 +251,25 @@ async function runBenchmark() {
 
     const endTime = performance.now();
     const executionTime = endTime - startTime;
+    
+    // Measure memory after WFC execution
+    const memoryAfter = getMemoryUsage();
+    const memoryUsed = {
+      before: memoryBefore,
+      after: memoryAfter,
+      diff: {
+        rss: memoryAfter.rss - memoryBefore.rss,
+        heapTotal: memoryAfter.heapTotal - memoryBefore.heapTotal,
+        heapUsed: memoryAfter.heapUsed - memoryBefore.heapUsed,
+        external: memoryAfter.external - memoryBefore.external,
+        arrayBuffers: memoryAfter.arrayBuffers - memoryBefore.arrayBuffers
+      }
+    };
+    
+    if (verbose) {
+      console.log('Memory after execution:', formatMemory(memoryAfter.heapUsed));
+      console.log('Memory increase:', formatMemory(memoryUsed.diff.heapUsed));
+    }
 
     // Store results
     results.push({
@@ -242,8 +284,8 @@ async function runBenchmark() {
         executionTime,
         success,
         collapses,
-        propagations,
-        backtracks
+        backtracks,
+        memory: memoryUsed
       }
     });
   }
@@ -254,14 +296,19 @@ async function runBenchmark() {
 
   const avgExecutionTime = results.reduce((sum, run) => sum + run.results.executionTime, 0) / results.length;
   const avgCollapses = results.reduce((sum, run) => sum + run.results.collapses, 0) / results.length;
-  const avgPropagations = results.reduce((sum, run) => sum + run.results.propagations, 0) / results.length;
   const avgBacktracks = results.reduce((sum, run) => sum + run.results.backtracks, 0) / results.length;
+  
+  // Calculate average memory metrics
+  const avgMemoryIncrease = {
+    rss: results.reduce((sum, run) => sum + run.results.memory.diff.rss, 0) / results.length,
+    heapUsed: results.reduce((sum, run) => sum + run.results.memory.diff.heapUsed, 0) / results.length
+  };
 
   console.log('Results:');
   console.log(`Success rate: ${successRate.toFixed(2)}%`);
   console.log(`Average execution time: ${avgExecutionTime.toFixed(2)}ms`);
+  console.log(`Average memory increase: ${formatMemory(avgMemoryIncrease.heapUsed)}`);
   console.log(`Average collapses: ${avgCollapses.toFixed(2)}`);
-  console.log(`Average propagations: ${avgPropagations.toFixed(2)}`);
   console.log(`Average backtracks: ${avgBacktracks.toFixed(2)}`);
 
   // Save results to file

@@ -14,7 +14,6 @@ The benchmarking tools track several key metrics:
 - **Execution Time**: How long the algorithm takes to run
 - **Algorithm Operations**:
   - Number of cell collapses
-  - Number of constraint propagations
   - Number of backtracking operations
 - **Success Rate**: Percentage of runs that complete successfully
 
@@ -81,16 +80,6 @@ The comparison tool displays:
    ```
 
 5. Review the metrics to see if your changes improved performance
-
-## Implementation Notes
-
-The benchmark uses a simplified simulation of the WFC algorithm that:
-
-1. Tracks the same key metrics as the real implementation
-2. Simulates the core operations (collapse, propagation, backtracking)
-3. Uses a similar entropy-based cell selection approach
-
-This approach allows for consistent benchmarking without modifying the source code or creating additional files in the src directory.
 
 ## Tips for Effective Benchmarking
 
