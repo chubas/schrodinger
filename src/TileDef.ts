@@ -1,7 +1,4 @@
-import {
-  AdjacencyRule,
-  DirectionalAdjacency,
-} from "./Adjacencies";
+import { AdjacencyRule, DirectionalAdjacency } from "./Adjacencies";
 
 export type TileDef = {
   /**

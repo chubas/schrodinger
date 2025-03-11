@@ -1,0 +1,23 @@
+{
+  "tiles": [
+    {
+      "name": "grass",
+      "adjacencies": ["grass", "grass", "grass", "grass"]
+    },
+    {
+      "name": "water",
+      "adjacencies": ["water", "water", "water", "water"],
+      "weight": 2
+    },
+    {
+      "name": "shore",
+      "adjacencies": ["grass", "water", "grass", "water"],
+      "rotation": 90
+    },
+    {
+      "name": "shore-corner",
+      "adjacencies": ["grass", "water", "water", "grass"],
+      "reflection": 1
+    }
+  ]
+}
