@@ -1,0 +1,650 @@
+[
+  {
+    "name": "0_A(012)",
+    "adjacencies": [
+      "AB",
+      "BA",
+      "CA",
+      "AC"
+    ],
+    "rotation": 0,
+    "weight": 1,
+    "id": 6
+  },
+  {
+    "name": "1_A(021)",
+    "adjacencies": [
+      "AC",
+      "CA",
+      "BA",
+      "AB"
+    ],
+    "rotation": 0,
+    "weight": 1,
+    "id": 14
+  },
+  {
+    "name": "2_A(102)",
+    "adjacencies": [
+      "BA",
+      "AB",
+      "CB",
+      "BC"
+    ],
+    "rotation": 0,
+    "weight": 1,
+    "id": 22
+  },
+  {
+    "name": "3_A(120)",
+    "adjacencies": [
+      "BC",
+      "CB",
+      "AB",
+      "BA"
+    ],
+    "rotation": 0,
+    "weight": 1,
+    "id": 30
+  },
+  {
+    "name": "4_A(201)",
+    "adjacencies": [
+      "CA",
+      "AC",
+      "BC",
+      "CB"
+    ],
+    "rotation": 0,
+    "weight": 1,
+    "id": 38
+  },
+  {
+    "name": "5_A(210)",
+    "adjacencies": [
+      "CB",
+      "BC",
+      "AC",
+      "CA"
+    ],
+    "rotation": 0,
+    "weight": 1,
+    "id": 46
+  },
+  {
+    "name": "6_A(012)",
+    "adjacencies": [
+      "AB",
+      "BA",
+      "CA",
+      "AC"
+    ],
+    "rotation": 0,
+    "weight": 1,
+    "id": 6
+  },
+  {
+    "name": "7_A(012)-X",
+    "adjacencies": [
+      "BA",
+      "AC",
+      "AC",
+      "BA"
+    ],
+    "rotation": 0,
+    "weight": 1,
+    "id": 7
+  },
+  {
+    "name": "8_A(012){1}",
+    "adjacencies": [
+      "CA",
+      "AB",
+      "AB",
+      "CA"
+    ],
+    "rotation": 1,
+    "weight": 1,
+    "id": 8
+  },
+  {
+    "name": "9_A(012){1}-X",
+    "adjacencies": [
+      "AC",
+      "CA",
+      "BA",
+      "AB"
+    ],
+    "rotation": 1,
+    "weight": 1,
+    "id": 9
+  },
+  {
+    "name": "10_A(012){2}",
+    "adjacencies": [
+      "AC",
+      "CA",
+      "BA",
+      "AB"
+    ],
+    "rotation": 2,
+    "weight": 1,
+    "id": 10
+  },
+  {
+    "name": "11_A(012){2}-X",
+    "adjacencies": [
+      "CA",
+      "AB",
+      "AB",
+      "CA"
+    ],
+    "rotation": 2,
+    "weight": 1,
+    "id": 11
+  },
+  {
+    "name": "12_A(012){3}",
+    "adjacencies": [
+      "BA",
+      "AC",
+      "AC",
+      "BA"
+    ],
+    "rotation": 3,
+    "weight": 1,
+    "id": 12
+  },
+  {
+    "name": "13_A(012){3}-X",
+    "adjacencies": [
+      "AB",
+      "BA",
+      "CA",
+      "AC"
+    ],
+    "rotation": 3,
+    "weight": 1,
+    "id": 13
+  },
+  {
+    "name": "14_A(021)",
+    "adjacencies": [
+      "AC",
+      "CA",
+      "BA",
+      "AB"
+    ],
+    "rotation": 0,
+    "weight": 1,
+    "id": 14
+  },
+  {
+    "name": "15_A(021)-X",
+    "adjacencies": [
+      "CA",
+      "AB",
+      "AB",
+      "CA"
+    ],
+    "rotation": 0,
+    "weight": 1,
+    "id": 15
+  },
+  {
+    "name": "16_A(021){1}",
+    "adjacencies": [
+      "BA",
+      "AC",
+      "AC",
+      "BA"
+    ],
+    "rotation": 1,
+    "weight": 1,
+    "id": 16
+  },
+  {
+    "name": "17_A(021){1}-X",
+    "adjacencies": [
+      "AB",
+      "BA",
+      "CA",
+      "AC"
+    ],
+    "rotation": 1,
+    "weight": 1,
+    "id": 17
+  },
+  {
+    "name": "18_A(021){2}",
+    "adjacencies": [
+      "AB",
+      "BA",
+      "CA",
+      "AC"
+    ],
+    "rotation": 2,
+    "weight": 1,
+    "id": 18
+  },
+  {
+    "name": "19_A(021){2}-X",
+    "adjacencies": [
+      "BA",
+      "AC",
+      "AC",
+      "BA"
+    ],
+    "rotation": 2,
+    "weight": 1,
+    "id": 19
+  },
+  {
+    "name": "20_A(021){3}",
+    "adjacencies": [
+      "CA",
+      "AB",
+      "AB",
+      "CA"
+    ],
+    "rotation": 3,
+    "weight": 1,
+    "id": 20
+  },
+  {
+    "name": "21_A(021){3}-X",
+    "adjacencies": [
+      "AC",
+      "CA",
+      "BA",
+      "AB"
+    ],
+    "rotation": 3,
+    "weight": 1,
+    "id": 21
+  },
+  {
+    "name": "22_A(102)",
+    "adjacencies": [
+      "BA",
+      "AB",
+      "CB",
+      "BC"
+    ],
+    "rotation": 0,
+    "weight": 1,
+    "id": 22
+  },
+  {
+    "name": "23_A(102)-X",
+    "adjacencies": [
+      "AB",
+      "BC",
+      "BC",
+      "AB"
+    ],
+    "rotation": 0,
+    "weight": 1,
+    "id": 23
+  },
+  {
+    "name": "24_A(102){1}",
+    "adjacencies": [
+      "CB",
+      "BA",
+      "BA",
+      "CB"
+    ],
+    "rotation": 1,
+    "weight": 1,
+    "id": 24
+  },
+  {
+    "name": "25_A(102){1}-X",
+    "adjacencies": [
+      "BC",
+      "CB",
+      "AB",
+      "BA"
+    ],
+    "rotation": 1,
+    "weight": 1,
+    "id": 25
+  },
+  {
+    "name": "26_A(102){2}",
+    "adjacencies": [
+      "BC",
+      "CB",
+      "AB",
+      "BA"
+    ],
+    "rotation": 2,
+    "weight": 1,
+    "id": 26
+  },
+  {
+    "name": "27_A(102){2}-X",
+    "adjacencies": [
+      "CB",
+      "BA",
+      "BA",
+      "CB"
+    ],
+    "rotation": 2,
+    "weight": 1,
+    "id": 27
+  },
+  {
+    "name": "28_A(102){3}",
+    "adjacencies": [
+      "AB",
+      "BC",
+      "BC",
+      "AB"
+    ],
+    "rotation": 3,
+    "weight": 1,
+    "id": 28
+  },
+  {
+    "name": "29_A(102){3}-X",
+    "adjacencies": [
+      "BA",
+      "AB",
+      "CB",
+      "BC"
+    ],
+    "rotation": 3,
+    "weight": 1,
+    "id": 29
+  },
+  {
+    "name": "30_A(120)",
+    "adjacencies": [
+      "BC",
+      "CB",
+      "AB",
+      "BA"
+    ],
+    "rotation": 0,
+    "weight": 1,
+    "id": 30
+  },
+  {
+    "name": "31_A(120)-X",
+    "adjacencies": [
+      "CB",
+      "BA",
+      "BA",
+      "CB"
+    ],
+    "rotation": 0,
+    "weight": 1,
+    "id": 31
+  },
+  {
+    "name": "32_A(120){1}",
+    "adjacencies": [
+      "AB",
+      "BC",
+      "BC",
+      "AB"
+    ],
+    "rotation": 1,
+    "weight": 1,
+    "id": 32
+  },
+  {
+    "name": "33_A(120){1}-X",
+    "adjacencies": [
+      "BA",
+      "AB",
+      "CB",
+      "BC"
+    ],
+    "rotation": 1,
+    "weight": 1,
+    "id": 33
+  },
+  {
+    "name": "34_A(120){2}",
+    "adjacencies": [
+      "BA",
+      "AB",
+      "CB",
+      "BC"
+    ],
+    "rotation": 2,
+    "weight": 1,
+    "id": 34
+  },
+  {
+    "name": "35_A(120){2}-X",
+    "adjacencies": [
+      "AB",
+      "BC",
+      "BC",
+      "AB"
+    ],
+    "rotation": 2,
+    "weight": 1,
+    "id": 35
+  },
+  {
+    "name": "36_A(120){3}",
+    "adjacencies": [
+      "CB",
+      "BA",
+      "BA",
+      "CB"
+    ],
+    "rotation": 3,
+    "weight": 1,
+    "id": 36
+  },
+  {
+    "name": "37_A(120){3}-X",
+    "adjacencies": [
+      "BC",
+      "CB",
+      "AB",
+      "BA"
+    ],
+    "rotation": 3,
+    "weight": 1,
+    "id": 37
+  },
+  {
+    "name": "38_A(201)",
+    "adjacencies": [
+      "CA",
+      "AC",
+      "BC",
+      "CB"
+    ],
+    "rotation": 0,
+    "weight": 1,
+    "id": 38
+  },
+  {
+    "name": "39_A(201)-X",
+    "adjacencies": [
+      "AC",
+      "CB",
+      "CB",
+      "AC"
+    ],
+    "rotation": 0,
+    "weight": 1,
+    "id": 39
+  },
+  {
+    "name": "40_A(201){1}",
+    "adjacencies": [
+      "BC",
+      "CA",
+      "CA",
+      "BC"
+    ],
+    "rotation": 1,
+    "weight": 1,
+    "id": 40
+  },
+  {
+    "name": "41_A(201){1}-X",
+    "adjacencies": [
+      "CB",
+      "BC",
+      "AC",
+      "CA"
+    ],
+    "rotation": 1,
+    "weight": 1,
+    "id": 41
+  },
+  {
+    "name": "42_A(201){2}",
+    "adjacencies": [
+      "CB",
+      "BC",
+      "AC",
+      "CA"
+    ],
+    "rotation": 2,
+    "weight": 1,
+    "id": 42
+  },
+  {
+    "name": "43_A(201){2}-X",
+    "adjacencies": [
+      "BC",
+      "CA",
+      "CA",
+      "BC"
+    ],
+    "rotation": 2,
+    "weight": 1,
+    "id": 43
+  },
+  {
+    "name": "44_A(201){3}",
+    "adjacencies": [
+      "AC",
+      "CB",
+      "CB",
+      "AC"
+    ],
+    "rotation": 3,
+    "weight": 1,
+    "id": 44
+  },
+  {
+    "name": "45_A(201){3}-X",
+    "adjacencies": [
+      "CA",
+      "AC",
+      "BC",
+      "CB"
+    ],
+    "rotation": 3,
+    "weight": 1,
+    "id": 45
+  },
+  {
+    "name": "46_A(210)",
+    "adjacencies": [
+      "CB",
+      "BC",
+      "AC",
+      "CA"
+    ],
+    "rotation": 0,
+    "weight": 1,
+    "id": 46
+  },
+  {
+    "name": "47_A(210)-X",
+    "adjacencies": [
+      "BC",
+      "CA",
+      "CA",
+      "BC"
+    ],
+    "rotation": 0,
+    "weight": 1,
+    "id": 47
+  },
+  {
+    "name": "48_A(210){1}",
+    "adjacencies": [
+      "AC",
+      "CB",
+      "CB",
+      "AC"
+    ],
+    "rotation": 1,
+    "weight": 1,
+    "id": 48
+  },
+  {
+    "name": "49_A(210){1}-X",
+    "adjacencies": [
+      "CA",
+      "AC",
+      "BC",
+      "CB"
+    ],
+    "rotation": 1,
+    "weight": 1,
+    "id": 49
+  },
+  {
+    "name": "50_A(210){2}",
+    "adjacencies": [
+      "CA",
+      "AC",
+      "BC",
+      "CB"
+    ],
+    "rotation": 2,
+    "weight": 1,
+    "id": 50
+  },
+  {
+    "name": "51_A(210){2}-X",
+    "adjacencies": [
+      "AC",
+      "CB",
+      "CB",
+      "AC"
+    ],
+    "rotation": 2,
+    "weight": 1,
+    "id": 51
+  },
+  {
+    "name": "52_A(210){3}",
+    "adjacencies": [
+      "BC",
+      "CA",
+      "CA",
+      "BC"
+    ],
+    "rotation": 3,
+    "weight": 1,
+    "id": 52
+  },
+  {
+    "name": "53_A(210){3}-X",
+    "adjacencies": [
+      "CB",
+      "BC",
+      "AC",
+      "CA"
+    ],
+    "rotation": 3,
+    "weight": 1,
+    "id": 53
+  }
+]
