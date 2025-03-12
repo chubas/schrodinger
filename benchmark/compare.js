@@ -10,7 +10,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Parse command line arguments
 const args = process.argv.slice(2);
-let historyFile = path.join(__dirname, 'benchmark-results.json');
+let historyFile = path.join(__dirname, '..', 'dist-benchmark', 'benchmark', 'benchmark-results.json');
 let limit = 10;
 
 // Process arguments
@@ -108,28 +108,60 @@ function displaySingleRun(run) {
   
   console.log(`Collapses: ${run.results.collapses}`);
   console.log(`Backtracks: ${run.results.backtracks}`);
+  
+  if (run.results.snapshots !== undefined) {
+    console.log(`Snapshots: ${run.results.snapshots}`);
+  }
+  
+  if (run.results.memorySamples !== undefined) {
+    console.log(`Memory samples: ${run.results.memorySamples}`);
+  }
 }
 
 // Compare multiple benchmark runs
 function displayRunComparison(runs) {
-  // Check if memory metrics are available in ANY of the runs
   const headers = [
     'Timestamp', 
     'Success', 
     'Exec Time (ms)',
-    'Memory Increase',
+    'Peak Memory', 
+    'End Memory',
     'Collapses',
-    'Backtracks'
+    'Backtracks',
+    'Snapshots',
+    'Mem Samples'
   ];
   
-  const rows = runs.map(run => [
-    formatTimestamp(run.timestamp).split(',')[0], // Just date part
-    run.results.success ? '✓' : '✗',
-    run.results.executionTime.toFixed(2),
-    formatBytes(run.results.memory.diff.heapUsed),
-    run.results.collapses.toString(),
-    run.results.backtracks.toString()
-  ]);
+  const rows = runs.map(run => {
+    const row = [
+      formatTimestamp(run.timestamp).split(',')[0], // Just date part
+      run.results.success ? '✓' : '✗',
+      run.results.executionTime.toFixed(2),
+    ];
+    
+    // Add memory metrics
+    if (run.results.memory) {
+      // Use peak memory if available, otherwise use the end difference
+      const peakMemory = run.results.memory.peakDiff ? 
+        formatBytes(run.results.memory.peakDiff.heapUsed) : 
+        formatBytes(run.results.memory.diff.heapUsed);
+        
+      const endMemory = formatBytes(run.results.memory.diff.heapUsed);
+      
+      row.push(peakMemory, endMemory);
+    } else {
+      row.push('N/A', 'N/A');
+    }
+    
+    row.push(
+      run.results.collapses.toString(),
+      run.results.backtracks.toString(),
+      (run.results.snapshots || 'N/A').toString(),
+      (run.results.memorySamples || 'N/A').toString()
+    );
+    
+    return row;
+  });
   
   console.log(formatTable(headers, rows));
 }
@@ -143,14 +175,73 @@ function displayTrends(runs) {
   const timeChange = percentChange(first.results.executionTime, last.results.executionTime);
   const collapsesChange = percentChange(first.results.collapses, last.results.collapses);
   const backtracksChange = percentChange(first.results.backtracks, last.results.backtracks);
-  const memoryChange = percentChange(first.results.memory.diff.heapUsed, last.results.memory.diff.heapUsed);
-  const memoryDetails = ` (${formatBytes(first.results.memory.diff.heapUsed)} → ${formatBytes(last.results.memory.diff.heapUsed)})`;
+  
+  // Calculate memory change if available
+  let peakMemoryChange = 'N/A';
+  let endMemoryChange = 'N/A';
+  let peakMemoryDetails = '';
+  let endMemoryDetails = '';
+  
+  const firstHasMemory = first.results.memory !== undefined;
+  const lastHasMemory = last.results.memory !== undefined;
+  
+  if (firstHasMemory && lastHasMemory) {
+    // For peak memory
+    if (first.results.memory.peakDiff && last.results.memory.peakDiff) {
+      peakMemoryChange = percentChange(
+        first.results.memory.peakDiff.heapUsed, 
+        last.results.memory.peakDiff.heapUsed
+      );
+      peakMemoryDetails = ` (${formatBytes(first.results.memory.peakDiff.heapUsed)} → ${formatBytes(last.results.memory.peakDiff.heapUsed)})`;
+    }
+    
+    // For end memory difference
+    endMemoryChange = percentChange(
+      first.results.memory.diff.heapUsed, 
+      last.results.memory.diff.heapUsed
+    );
+    endMemoryDetails = ` (${formatBytes(first.results.memory.diff.heapUsed)} → ${formatBytes(last.results.memory.diff.heapUsed)})`;
+  }
+  
+  // Calculate snapshot change if available
+  let snapshotsChange = 'N/A';
+  let snapshotsDetails = '';
+  
+  if (first.results.snapshots !== undefined && last.results.snapshots !== undefined) {
+    snapshotsChange = percentChange(first.results.snapshots, last.results.snapshots);
+    snapshotsDetails = ` (${first.results.snapshots} → ${last.results.snapshots})`;
+  }
+  
+  // Calculate memory samples change if available
+  let memorySamplesChange = 'N/A';
+  let memorySamplesDetails = '';
+  
+  if (first.results.memorySamples !== undefined && last.results.memorySamples !== undefined) {
+    memorySamplesChange = percentChange(first.results.memorySamples, last.results.memorySamples);
+    memorySamplesDetails = ` (${first.results.memorySamples} → ${last.results.memorySamples})`;
+  }
   
   console.log('\nTrends:');
   console.log(`Execution time: ${timeChange} (${first.results.executionTime.toFixed(2)}ms → ${last.results.executionTime.toFixed(2)}ms)`);
-  console.log(`Memory usage: ${memoryChange}${memoryDetails}`);
+  
+  // Display memory trends
+  if (firstHasMemory || lastHasMemory) {
+    if (peakMemoryChange !== 'N/A') {
+      console.log(`Peak memory usage: ${peakMemoryChange}${peakMemoryDetails}`);
+    }
+    console.log(`End memory change: ${endMemoryChange}${endMemoryDetails}`);
+  }
+  
   console.log(`Collapses: ${collapsesChange} (${first.results.collapses} → ${last.results.collapses})`);
   console.log(`Backtracks: ${backtracksChange} (${first.results.backtracks} → ${last.results.backtracks})`);
+  
+  if (snapshotsChange !== 'N/A') {
+    console.log(`Snapshots: ${snapshotsChange}${snapshotsDetails}`);
+  }
+  
+  if (memorySamplesChange !== 'N/A') {
+    console.log(`Memory samples: ${memorySamplesChange}${memorySamplesDetails}`);
+  }
   
   // Check for potential issues
   if (last.results.executionTime > first.results.executionTime * 1.2) {
@@ -159,11 +250,13 @@ function displayTrends(runs) {
     console.log('✅ Performance has improved significantly');
   }
   
-  // Check memory trends if available
-  if (last.results.memory.diff.heapUsed > first.results.memory.diff.heapUsed * 1.2) {
-    console.log('⚠️ Memory usage has increased significantly');
-  } else if (last.results.memory.diff.heapUsed < first.results.memory.diff.heapUsed * 0.8) {
-    console.log('✅ Memory usage has decreased significantly');
+  // Check memory trends if available for peak memory
+  if (firstHasMemory && lastHasMemory && first.results.memory.peakDiff && last.results.memory.peakDiff) {
+    if (last.results.memory.peakDiff.heapUsed > first.results.memory.peakDiff.heapUsed * 1.2) {
+      console.log('⚠️ Peak memory usage has increased significantly');
+    } else if (last.results.memory.peakDiff.heapUsed < first.results.memory.peakDiff.heapUsed * 0.8) {
+      console.log('✅ Peak memory usage has decreased significantly');
+    }
   }
   
   if (last.results.backtracks > first.results.backtracks * 1.2) {
