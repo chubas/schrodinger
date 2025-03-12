@@ -1,4 +1,5 @@
 import { TileDefFactory } from "./TileDef.js";
+import { AdjacencyBitsetAdapter } from "./AdjacencyBitsetAdapter.js";
 
 export type SimpleAdjacency = string[];
 
@@ -71,7 +72,7 @@ function matchCompoundAdjacencies(
   return true;
 }
 
-export function matchAdjacencies(
+function matchAdjacenciesOriginal(
   adj1: string | AdjacencyRule,
   adj2: string | AdjacencyRule,
 ): boolean {
@@ -96,4 +97,20 @@ export function matchAdjacencies(
 
   // Different types never match
   return false;
+}
+
+export function matchAdjacencies(
+  adj1: string | AdjacencyRule,
+  adj2: string | AdjacencyRule,
+): boolean {
+  // Use the BitsetAdapter for more efficient matching
+  const adapter = AdjacencyBitsetAdapter.getInstance();
+  return adapter.matchAdjacencies(adj1, adj2);
+}
+
+export function matchAdjacenciesStandard(
+  adj1: string | AdjacencyRule,
+  adj2: string | AdjacencyRule,
+): boolean {
+  return matchAdjacenciesOriginal(adj1, adj2);
 }
