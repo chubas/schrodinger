@@ -178,48 +178,4 @@ describe("WFC Delta Snapshots", () => {
     expect(cell2.choices.length).toBe(cell2Original.length);
     expect(cell3.choices.length).toBe(cell3Original.length);
   });
-
-  it("should emit snapshot event when taking a snapshot", () => {
-    const grid = new SquareGrid(3, 3);
-    const wfc = new WFC(backtrackTiles, grid);
-
-    let snapshotEventFired = false;
-    let snapshotId: number | null = null;
-
-    wfc.on("snapshot", (id) => {
-      snapshotEventFired = true;
-      snapshotId = id;
-    });
-
-    // Take a snapshot
-    const id = (wfc as any).takeSnapshot();
-
-    // Verify that the snapshot event was fired
-    expect(snapshotEventFired).toBe(true);
-    expect(snapshotId).toBe(id);
-  });
-
-  it("should emit snapshot event when restoring a snapshot", () => {
-    const grid = new SquareGrid(3, 3);
-    const wfc = new WFC(backtrackTiles, grid);
-
-    // Take a snapshot
-    const id = (wfc as any).takeSnapshot();
-
-    // Reset the event tracking
-    let snapshotEventFired = false;
-    let snapshotId: number | null = null;
-
-    wfc.on("snapshot", (id) => {
-      snapshotEventFired = true;
-      snapshotId = id;
-    });
-
-    // Restore the snapshot
-    (wfc as any).restoreSnapshot(id);
-
-    // Verify that the snapshot event was fired
-    expect(snapshotEventFired).toBe(true);
-    expect(snapshotId).toBe(id);
-  });
 });

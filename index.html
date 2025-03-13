@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Triangular Tile Pattern with WFC</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            display: block;
+            margin: 20px auto;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+        }
+        .controls {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .info {
+            margin-top: 20px;
+            max-width: 800px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>Triangular Tile Pattern with WFC</h1>
+
+    <div class="controls">
+        <p>Press 'P' to toggle tile preview mode | Press 'R' to restart generation</p>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <div class="info">
+        <p>This sketch uses the Wave Function Collapse algorithm to generate a pattern of triangular tiles.</p>
+        <p>The tiles are designed to create continuous color patterns across the grid.</p>
+    </div>
+
+    <!-- Load p5.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.min.js"></script>
+
+    <!-- Load our custom EventEmitter implementation -->
+    <script src="EventEmitter.js"></script>
+
+    <!-- Define global events module for compatibility -->
+    <script>
+        // Create a global events module for compatibility
+        window.events = { EventEmitter: window.EventEmitter };
+
+        // Define a global require function for compatibility
+        window.require = function(moduleName) {
+            if (moduleName === 'events') {
+                return window.events;
+            }
+            throw new Error(`Module ${moduleName} not found`);
+        };
+    </script>
+
+    <!-- Load Schrodinger WFC library -->
+    <script src="dist/index.global.js"></script>
+
+    <!-- Load our sketch -->
+    <script src="iso.js"></script>
+</body>
+</html>
