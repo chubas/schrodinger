@@ -39,4 +39,4 @@ coverage/
 .env.local
 .env.*.local
 
-benchmark*.json
+*benchmark*.json

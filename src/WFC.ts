@@ -42,6 +42,7 @@ export type WFCEvents = {
   backtrack: (from: CollapseGroup) => void;
   complete: () => void;
   error: (error: Error) => void;
+  snapshot: (id: number) => void;
 };
 
 export type DeltaChange<Coords> = {
@@ -53,6 +54,19 @@ export type DeltaChange<Coords> = {
     collapsed: boolean;
   }>;
   backtrack?: boolean;
+};
+
+// New type for delta snapshots
+export type CellDelta = {
+  cellId: string; // Formatted as "x,y" for SquareGrid
+  choices: TileDef[]; // The choices at the time of snapshot
+  collapsed: boolean; // Whether the cell was collapsed
+  value?: TileDef; // The value if collapsed
+};
+
+export type DeltaSnapshot = {
+  deltas: Map<string, CellDelta>; // Map of cell IDs to their state
+  changedCellIds: Set<string>; // Set of cell IDs that have changed since the last snapshot
 };
 
 interface ProposedChange {
@@ -80,7 +94,8 @@ export class WFC extends EventEmitter {
   private readonly deltaStack: DeltaChange<[number, number]>[];
   private readonly collapseQueue: CollapseGroup[] = [];
   private readonly propagationQueue: Set<Cell> = new Set();
-  private readonly snapshots: Map<number, GridSnapshot> = new Map();
+  private readonly snapshots: Map<number, DeltaSnapshot> = new Map(); // Changed to DeltaSnapshot
+  private readonly lastCellState: Map<string, CellDelta> = new Map(); // Track last known state of each cell
   private snapshotCounter: number = 0;
   private currentBacktrackState?: BacktrackState;
   private readonly MAX_ATTEMPTS_PER_LEVEL = 10;
@@ -694,11 +709,47 @@ export class WFC extends EventEmitter {
   }
 
   private takeSnapshot(): number {
-    const snapshot = this.#grid.toSnapshot();
     const id = this.snapshotCounter++;
+    const snapshot: DeltaSnapshot = {
+      deltas: new Map(),
+      changedCellIds: new Set()
+    };
+
+    // Iterate through all cells and store their current state
+    for (const [cell, coords] of this.#grid.iterate()) {
+      const cellId = `${coords[0]},${coords[1]}`;
+
+      // Create a delta for this cell
+      const delta: CellDelta = {
+        cellId,
+        choices: [...cell.choices], // Clone the choices array
+        collapsed: cell.collapsed,
+        value: cell.collapsed && cell.choices.length > 0 ? cell.choices[0] : undefined
+      };
+
+      // Store the delta in the snapshot
+      snapshot.deltas.set(cellId, delta);
+
+      // Check if this cell has changed since the last known state
+      const lastState = this.lastCellState.get(cellId);
+      if (!lastState ||
+          lastState.collapsed !== delta.collapsed ||
+          lastState.choices.length !== delta.choices.length ||
+          (lastState.value !== delta.value && (lastState.value || delta.value))) {
+        snapshot.changedCellIds.add(cellId);
+      }
+
+      // Update the last known state
+      this.lastCellState.set(cellId, delta);
+    }
+
     this.snapshots.set(id, snapshot);
     this.log(LogLevel.DEBUG, "📷 Taking snapshot", id, "Current grid state:");
     this.debugGridState();
+
+    // Emit snapshot event
+    this.emit("snapshot", id);
+
     return id;
   }
 
@@ -707,11 +758,36 @@ export class WFC extends EventEmitter {
     if (!snapshot) {
       throw new Error(`Snapshot ${id} not found`);
     }
+
     this.log(LogLevel.DEBUG, "Restoring snapshot", id, "Previous grid state:");
     this.debugGridState();
-    this.#grid = SquareGrid.fromSnapshot(snapshot);
+
+    // Restore only the cells that have changed since this snapshot was taken
+    for (const cellId of snapshot.changedCellIds) {
+      const delta = snapshot.deltas.get(cellId);
+      if (!delta) continue;
+
+      // Parse the cell coordinates from the cellId
+      const [x, y] = cellId.split(',').map(Number);
+      const cell = this.#grid.get([x, y]);
+
+      if (cell) {
+        // Restore the cell state
+        cell.choices = [...delta.choices]; // Clone the choices array
+        cell.collapsed = delta.collapsed;
+      }
+    }
+
+    // Update the last known state for all cells in the snapshot
+    for (const [cellId, delta] of snapshot.deltas.entries()) {
+      this.lastCellState.set(cellId, delta);
+    }
+
     this.log(LogLevel.DEBUG, "After restore:");
     this.debugGridState();
+
+    // Emit snapshot event for the restored snapshot
+    this.emit("snapshot", id);
   }
 
   private debugGridState() {
@@ -870,26 +946,25 @@ export class WFC extends EventEmitter {
   }
 
   private hasExhaustedAllChoices(state: BacktrackState): boolean {
-    const { group, triedValues } = state;
-
-    for (const cellCollapse of group.cells) {
+    // Check if we've tried all possible values for each cell in the group
+    for (const cellCollapse of state.group.cells) {
+      const [x, y] = cellCollapse.coords;
       const cell = this.#grid.get(cellCollapse.coords);
       if (!cell) continue;
 
-      const coordKey = `${cellCollapse.coords[0]},${cellCollapse.coords[1]}`;
-      const tried = triedValues.get(coordKey) || new Set<TileDef>();
+      const coordKey = `${x},${y}`;
+      const tried = state.triedValues.get(coordKey) || new Set();
 
       // Get choices from the snapshot state
       const snapshot = this.snapshots.get(state.snapshotId);
       if (!snapshot) return true; // If no snapshot, consider exhausted
 
-      const snapshotCell = snapshot.cells.find(
-        (c) => c.coords[0] === cell.coords[0] && c.coords[1] === cell.coords[1],
-      );
+      const cellId = `${x},${y}`;
+      const snapshotCell = snapshot.deltas.get(cellId);
       if (!snapshotCell) return true;
 
       // If there are any untried choices from the snapshot state, we haven't exhausted all possibilities
-      if (snapshotCell.choices.some((choice) => !tried.has(choice))) {
+      if (snapshotCell.choices.some((choice: TileDef) => !tried.has(choice))) {
         return false;
       }
     }
