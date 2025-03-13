@@ -223,14 +223,31 @@ async function runBenchmark(): Promise<boolean> {
     // Initialize memory tracking
     const memoryBefore = getMemoryUsage();
     let peakRss = memoryBefore.rss;
+    let peakHeapTotal = memoryBefore.heapTotal;
+    let peakHeapUsed = memoryBefore.heapUsed;
+    let peakExternal = memoryBefore.external;
+    let peakArrayBuffers = memoryBefore.arrayBuffers;
     let memorySamplesCount = 0;
-    
+
+    // Track cumulative memory for calculating averages
+    let cumulativeRss = 0;
+    let cumulativeHeapUsed = 0;
+
     const trackMemory = () => {
       const memory = getMemoryUsage();
       peakRss = Math.max(peakRss, memory.rss);
+      peakHeapTotal = Math.max(peakHeapTotal, memory.heapTotal);
+      peakHeapUsed = Math.max(peakHeapUsed, memory.heapUsed);
+      peakExternal = Math.max(peakExternal, memory.external);
+      peakArrayBuffers = Math.max(peakArrayBuffers, memory.arrayBuffers);
+
+      // Add to cumulative totals for average calculation
+      cumulativeRss += memory.rss;
+      cumulativeHeapUsed += memory.heapUsed;
+
       memorySamplesCount++;
     };
-    
+
     // Start tracking memory at 1ms intervals
     const memoryTrackingInterval = setInterval(trackMemory, 1);
 
@@ -246,7 +263,7 @@ async function runBenchmark(): Promise<boolean> {
       // Sample memory on each backtrack operation
       trackMemory();
     });
-    
+
     // Add event listener for snapshots
     wfc.on('snapshot', () => {
       snapshotCount++;
@@ -286,20 +303,29 @@ async function runBenchmark(): Promise<boolean> {
 
     const endTime = performance.now();
     const executionTime = endTime - startTime;
-    
+
     // Stop memory tracking
     clearInterval(memoryTrackingInterval);
-    
+
     // Take a final memory sample
     trackMemory();
-    
+
     const memoryAfter = getMemoryUsage();
-    
+
+    // Calculate average memory usage
+    const avgRss = memorySamplesCount > 0 ? cumulativeRss / memorySamplesCount : 0;
+    const avgHeapUsed = memorySamplesCount > 0 ? cumulativeHeapUsed / memorySamplesCount : 0;
+
     if (verbose) {
       console.log(`Memory after execution: ${formatMemory(memoryAfter.rss)}`);
-      console.log(`Peak memory usage: ${formatMemory(peakRss)}`);
-      console.log(`Memory increase (end): ${formatMemory(memoryAfter.rss - memoryBefore.rss)}`);
-      console.log(`Memory increase (peak): ${formatMemory(peakRss - memoryBefore.rss)}`);
+      console.log(`Peak RSS usage: ${formatMemory(peakRss)}`);
+      console.log(`Peak heap usage: ${formatMemory(peakHeapUsed)}`);
+      console.log(`Average RSS usage: ${formatMemory(avgRss)}`);
+      console.log(`Average heap usage: ${formatMemory(avgHeapUsed)}`);
+      console.log(`Memory increase (end RSS): ${formatMemory(memoryAfter.rss - memoryBefore.rss)}`);
+      console.log(`Memory increase (peak RSS): ${formatMemory(peakRss - memoryBefore.rss)}`);
+      console.log(`Memory increase (end heap): ${formatMemory(memoryAfter.heapUsed - memoryBefore.heapUsed)}`);
+      console.log(`Memory increase (peak heap): ${formatMemory(peakHeapUsed - memoryBefore.heapUsed)}`);
       console.log(`Memory samples collected: ${memorySamplesCount}`);
       console.log(`Total snapshots created: ${snapshotCount}`);
     }
@@ -325,10 +351,14 @@ async function runBenchmark(): Promise<boolean> {
           after: memoryAfter,
           peak: {
             rss: peakRss,
-            heapTotal: 0, // Not tracking individual peak values for these
-            heapUsed: 0,
-            external: 0,
-            arrayBuffers: 0
+            heapTotal: peakHeapTotal,
+            heapUsed: peakHeapUsed,
+            external: peakExternal,
+            arrayBuffers: peakArrayBuffers
+          },
+          average: {
+            rss: avgRss,
+            heapUsed: avgHeapUsed
           },
           diff: {
             rss: memoryAfter.rss - memoryBefore.rss,
@@ -339,8 +369,10 @@ async function runBenchmark(): Promise<boolean> {
           },
           peakDiff: {
             rss: peakRss - memoryBefore.rss,
-            heapTotal: 0,
-            heapUsed: 0
+            heapTotal: peakHeapTotal - memoryBefore.heapTotal,
+            heapUsed: peakHeapUsed - memoryBefore.heapUsed,
+            external: peakExternal - memoryBefore.external,
+            arrayBuffers: peakArrayBuffers - memoryBefore.arrayBuffers
           }
         }
       }
@@ -355,7 +387,7 @@ async function runBenchmark(): Promise<boolean> {
   const avgCollapses = results.reduce((sum, run) => sum + run.results.collapses, 0) / results.length;
   const avgBacktracks = results.reduce((sum, run) => sum + run.results.backtracks, 0) / results.length;
   const avgSnapshots = results.reduce((sum, run) => sum + (run.results.snapshots || 0), 0) / results.length;
-  
+
   // Calculate average memory metrics
   const avgMemoryIncrease = {
     rss: results.reduce((sum, run) => sum + run.results.memory.diff.rss, 0) / results.length,
