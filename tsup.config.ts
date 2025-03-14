@@ -28,8 +28,8 @@ export default defineConfig([
       // Add browser target
       options.target = 'es2015';
     },
-    // Add events as an external dependency that will be provided by the browser
-    external: ['events'],
+    // Mark Node.js-specific modules and browser-provided modules as external
+    external: ['events', 'fs', 'path'],
     noExternal: ['seedrandom'],
   }
 ]);

@@ -13,7 +13,7 @@ let colors = [
   "lightblue",
   "green",
 ];
-let preview = false;
+let preview = true;
 let done = false;
 
 // Check if Schrodinger is loaded
