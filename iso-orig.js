@@ -2,11 +2,11 @@
 // Based on the original _iso.js implementation
 
 // Configuration
-let tileSize = 60;
+let tileSize = 100;
 // let tileX = 10;
 // let tileY = 15;
-let tileX = 10;
-let tileY = 15;
+let tileX = 4;
+let tileY = 4;
 let tileWidth, tileHeight;
 let wfc;
 let TILES = [];
@@ -261,9 +261,6 @@ function generateTiles() {
     }
   });
 
-  // possibleTilesA = possibleTilesA.slice(0, floor(possibleTilesA.length / 2));
-  // possibleTilesB = possibleTilesB.slice(0, floor(possibleTilesB.length / 2));
-
   // Create tile definitions
   for (let t of possibleTilesA) {
     TILES.push(createTileA(t));
@@ -316,7 +313,7 @@ function setup() {
   }
 
   let rng = new P5Random();
-  // rng.setSeed(10);
+  rng.setSeed(10);
   // Create canvas
   createCanvas(tileX * tileWidth, tileY * tileHeight);
 
@@ -325,7 +322,7 @@ function setup() {
     const grid = new Schrodinger.SquareGrid(tileX, tileY);
     wfc = new Schrodinger.WFC(TILES, grid, {
       maxRetries: 10,
-      // logLevel: Schrodinger.LogLevel.DEBUG,
+      logLevel: Schrodinger.LogLevel.DEBUG,
       random: rng
     });
 
@@ -368,9 +365,8 @@ function setup() {
 // p5.js draw function
 function draw() {
   if (preview) return;
-  if (done) return;
 
-  background(200);
+  background('green');
 
   // Draw the current state of the grid
   for (const [cell, coords] of wfc.iterate()) {
@@ -387,22 +383,6 @@ function draw() {
       // text(cell.choices[0].name, tileWidth / 2, tileHeight / 2);
       // console.log(`${coords[0]}, ${coords[1]} | Adjacencies: ${cell.choices[0].adjacencies} --- ${cell.choices[0].id}`);
       pop();
-      // Also draw the adjacencies
-      // Top Adjacency. Align text top center to be within the cell and touching the top edge
-      fill('red');
-      textAlign(CENTER, TOP);
-      text(cell.choices[0].adjacencies[0], x + tileWidth / 2, y);
-      // Bottom Adjacency. Align text bottom center to be within the cell and touching the bottom edge
-      textAlign(CENTER, BOTTOM);
-      text(cell.choices[0].adjacencies[2], x + tileWidth / 2, y + tileHeight);
-      // Left Adjacency. Align text left center to be within the cell and touching the left edge
-      textAlign(LEFT, CENTER);
-      text(cell.choices[0].adjacencies[3], x, y + tileHeight / 2);
-      // Right Adjacency. Align text right center to be within the cell and touching the right edge
-      textAlign(RIGHT, CENTER);
-      text(cell.choices[0].adjacencies[1], x + tileWidth, y + tileHeight / 2);
-      
-      
     } else {
       // Draw uncollapsed cells
       // push();
@@ -430,14 +410,6 @@ function draw() {
   //   }
   // }
   // noLoop();
-  // Advance the WFC one step
-  if (stepMode) {
-    const result = wfcGenerator.next();
-    if (result.done) {
-      done = true;
-      wfcGenerator = null;
-    }
-  }
 }
 
 // Preview all generated tiles
@@ -566,37 +538,6 @@ function keyPressed() {
       } catch (error) {
         console.error('Error setting up step mode:', error);
       }
-    }
-  } else if (key === 'D' || key === 'd') {
-    // Debug mode - display detailed information about each cell
-    if (!preview && wfc) {
-      console.log("--- WFC Cell Debug Information ---");
-      
-      // Iterate through each cell in the grid
-      for (const [cell, coords] of wfc.iterate()) {
-        // Create a console group with cell coordinates as header
-        console.group(`Cell [${coords[0]}, ${coords[1]}] - ${cell.choices.length} choices${cell.collapsed ? " - COLLAPSED" : ""}`);
-        
-        // Create an array of objects for the table
-        const tableData = cell.choices.map(tile => {
-          return {
-            ID: tile.id,
-            Name: tile.name,
-            Adjacencies: tile.adjacencies.join(', ')
-          };
-        });
-        
-        // Display the table of remaining tiles
-        if (tableData.length > 0) {
-          console.table(tableData);
-        } else {
-          console.log("No remaining choices");
-        }
-        
-        console.groupEnd();
-      }
-      
-      console.log("--- End of Debug Information ---");
     }
   }
 }

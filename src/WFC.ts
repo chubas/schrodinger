@@ -85,6 +85,12 @@ type BacktrackState = {
   wasSuccessful?: boolean; // Track if this state led to a successful collapse
 };
 
+export type StepResult = {
+  type: "collapse" | "backtrack" | "complete";
+  group?: CollapseGroup;
+  affectedCells?: Cell[];
+};
+
 export class WFC extends EventEmitter {
   private readonly tileDefs: TileDef[];
   private readonly options: WFCOptions;
@@ -165,6 +171,20 @@ export class WFC extends EventEmitter {
 
   start(initialSeed?: CellCollapse[]): void {
     try {
+      // Create and run the generator to completion
+      const generator = this.execute(initialSeed, true); // Use the generator with events
+      let result: IteratorResult<StepResult>;
+      do {
+        result = generator.next();
+        // Events are emitted inside the generator
+      } while (!result.done);
+    } catch (error) {
+      this.emit("error", error);
+    }
+  }
+
+  *execute(initialSeed?: CellCollapse[], emitEvents: boolean = true): Generator<StepResult, void, unknown> {
+    try {
       if (initialSeed && initialSeed.length > 0) {
         this.log(LogLevel.DEBUG, "Starting with initial seed");
         this.log(
@@ -178,7 +198,7 @@ export class WFC extends EventEmitter {
         try {
           // Apply the seed and check for forced collapses
           const result = this.collapseGroupWithValues(
-            { cells: initialSeed, cause: "initial" },
+            { cells: initialSeed, cause: "initial" as const },
             new Map(
               initialSeed.map((cell) => [
                 `${cell.coords[0]},${cell.coords[1]}`,
@@ -193,6 +213,11 @@ export class WFC extends EventEmitter {
             this.snapshots.delete(snapshotId);
             throw new Error("Initial seed creates an impossible state");
           }
+
+          // Yield the initial collapse step
+          const initialGroup = { cells: initialSeed, cause: "initial" as const };
+          if (emitEvents) this.emit("collapse", initialGroup);
+          yield { type: "collapse", group: initialGroup, affectedCells: result.affectedCells };
 
           // Clean up the snapshot since we succeeded
           this.snapshots.delete(snapshotId);
@@ -248,13 +273,19 @@ export class WFC extends EventEmitter {
         }
       }
 
-      this.processCollapseQueue();
+      yield* this.processCollapseQueueGenerator(emitEvents);
+      
+      if (this.completed) {
+        if (emitEvents) this.emit("complete");
+        yield { type: "complete" };
+      }
     } catch (error) {
-      this.emit("error", error);
+      if (emitEvents) this.emit("error", error);
+      throw error;
     }
   }
 
-  private processCollapseQueue(): void {
+  private *processCollapseQueueGenerator(emitEvents: boolean = true): Generator<StepResult, void, unknown> {
     while (this.collapseQueue.length > 0) {
       const currentGroup = this.collapseQueue.shift()!;
 
@@ -271,7 +302,18 @@ export class WFC extends EventEmitter {
       this.currentBacktrackState = backtrackState;
 
       try {
-        const success = this.attemptCollapseWithRetries(backtrackState);
+        const stepResults = this.attemptCollapseWithRetriesGenerator(backtrackState, emitEvents);
+        let stepResult: IteratorResult<StepResult>;
+        
+        do {
+          stepResult = stepResults.next();
+          if (!stepResult.done && stepResult.value) {
+            yield stepResult.value;
+          }
+        } while (!stepResult.done);
+
+        const success = stepResult.value;
+
         if (!success) {
           // If we couldn't collapse even with retries, we need to go back further
           this.log(
@@ -289,10 +331,20 @@ export class WFC extends EventEmitter {
             !!this.currentBacktrackState?.parentState,
           );
 
-          // Clean up the current snapshot before backtracking
-          // this.snapshots.delete(snapshotId);
-
-          if (!this.handleMultiLevelBacktrack()) {
+          // Try multi-level backtrack
+          const multiBacktrackResults = this.handleMultiLevelBacktrackGenerator(emitEvents);
+          let multiResult: IteratorResult<StepResult, boolean>;
+          
+          do {
+            multiResult = multiBacktrackResults.next();
+            if (!multiResult.done && multiResult.value) {
+              yield multiResult.value;
+            }
+          } while (!multiResult.done);
+          
+          const multiSuccess = multiResult.value;
+          
+          if (!multiSuccess) {
             throw new Error(
               "Pattern is uncollapsable - no valid solutions found",
             );
@@ -335,13 +387,9 @@ export class WFC extends EventEmitter {
         throw error;
       }
     }
-
-    if (this.completed) {
-      this.emit("complete");
-    }
   }
 
-  private attemptCollapseWithRetries(state: BacktrackState): boolean {
+  private *attemptCollapseWithRetriesGenerator(state: BacktrackState, emitEvents: boolean = true): Generator<StepResult, boolean, unknown> {
     const maxAttempts = state.group.maxAttempts ?? this.MAX_ATTEMPTS_PER_LEVEL;
 
     while (state.attempts < maxAttempts) {
@@ -349,13 +397,17 @@ export class WFC extends EventEmitter {
       if (state.attempts > 0) {
         this.restoreSnapshot(state.snapshotId);
         // Emit backtrack event when we retry
-        this.emit("backtrack", state.group);
+        if (emitEvents) this.emit("backtrack", state.group);
+        yield { type: "backtrack", group: state.group };
       }
 
       state.attempts++;
 
       const result = this.collapseGroupWithTracking(state);
       if (result.success) {
+        // Emit collapse event
+        if (emitEvents) this.emit("collapse", state.group);
+        yield { type: "collapse", group: state.group, affectedCells: result.affectedCells };
         return true;
       }
 
@@ -369,13 +421,14 @@ export class WFC extends EventEmitter {
     return false;
   }
 
-  private handleMultiLevelBacktrack(): boolean {
+  private *handleMultiLevelBacktrackGenerator(emitEvents: boolean = true): Generator<StepResult, boolean, unknown> {
     let currentState = this.currentBacktrackState;
     let backtrackDepth = 0;
 
     while (currentState) {
       backtrackDepth++;
-      this.emit("backtrack", currentState.group); // Emit backtrack event for each level
+      if (emitEvents) this.emit("backtrack", currentState.group); // Emit backtrack event for each level
+      yield { type: "backtrack", group: currentState.group };
 
       // Try to find a previous state that still has untried possibilities
       if (!this.hasExhaustedAllChoices(currentState)) {
@@ -391,7 +444,19 @@ export class WFC extends EventEmitter {
         this.propagationQueue.clear();
 
         // Attempt to collapse with new choices
-        if (this.attemptCollapseWithRetries(currentState)) {
+        const stepResults = this.attemptCollapseWithRetriesGenerator(currentState, emitEvents);
+        let stepResult: IteratorResult<StepResult, boolean>;
+        
+        do {
+          stepResult = stepResults.next();
+          if (!stepResult.done && stepResult.value) {
+            yield stepResult.value;
+          }
+        } while (!stepResult.done);
+        
+        const success = stepResult.value;
+        
+        if (success) {
           return true;
         }
       }
@@ -402,6 +467,15 @@ export class WFC extends EventEmitter {
     }
 
     return false;
+  }
+
+  private processCollapseQueue(): void {
+    const generator = this.processCollapseQueueGenerator(false); // Don't emit events directly
+    let result: IteratorResult<StepResult>;
+    do {
+      result = generator.next();
+      // Don't emit events here since this is used within start()
+    } while (!result.done);
   }
 
   private collapseGroupWithTracking(state: BacktrackState): CollapseResult {

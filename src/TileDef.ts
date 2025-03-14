@@ -90,6 +90,8 @@ export class TileDefFactory {
   }
 
   private static tokenizeSimpleAdjacency(rule: string): string[] {
+    return rule.split("|")
+    // 
     const tokens: string[] = [];
     let currentToken = "";
     let inParens = false;

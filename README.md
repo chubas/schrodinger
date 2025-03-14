@@ -17,8 +17,14 @@ A flexible, engine-agnostic implementation of the Wave Function Collapse (WFC) a
   - Multiple backtracking strategies (single step, multi-step)
 - **Interactive Processing**:
   - Event-based system for state changes
-  - Generator functions for step-by-step collapse visualization
   - Real-time debugging and visualization support
+- **Flexible grid system supporting various topologies (square, hexagonal, etc.)
+- **Customizable tile definitions with adjacency rules
+- **Backtracking for handling impossible states
+- **Event-based system for monitoring the collapse process
+- **Generator functions for step-by-step execution and visualization
+- **Binary adjacency representation for optimized performance
+- **Browser compatibility**
 
 ## Installation
 

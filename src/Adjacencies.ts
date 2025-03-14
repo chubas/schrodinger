@@ -104,8 +104,9 @@ export function matchAdjacencies(
   adj2: string | AdjacencyRule,
 ): boolean {
   // Use the BitsetAdapter for more efficient matching
-  const adapter = AdjacencyBitsetAdapter.getInstance();
-  return adapter.matchAdjacencies(adj1, adj2);
+  // const adapter = AdjacencyBitsetAdapter.getInstance();
+  // return adapter.matchAdjacencies(adj1, adj2);
+  return matchAdjacenciesOriginal(adj1, adj2);
 }
 
 export function matchAdjacenciesStandard(
