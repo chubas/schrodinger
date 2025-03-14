@@ -757,6 +757,8 @@ export class WFC extends EventEmitter {
     const snapshot = this.snapshots.get(id);
     if (!snapshot) {
       throw new Error(`Snapshot ${id} not found`);
+      // console.error(`Snapshot ${id} not found`);
+      // return;
     }
 
     this.log(LogLevel.DEBUG, "Restoring snapshot", id, "Previous grid state:");

@@ -2,9 +2,11 @@
 // Based on the original _iso.js implementation
 
 // Configuration
-let tileSize = 40;
-let tileX = 10;
-let tileY = 15;
+let tileSize = 100;
+// let tileX = 10;
+// let tileY = 15;
+let tileX = 4;
+let tileY = 4;
 let tileWidth, tileHeight;
 let wfc;
 let TILES = [];
@@ -286,6 +288,29 @@ function setup() {
     return;
   }
 
+  // Create a class for random using p5.js random lib
+  class P5Random {
+    constructor() {
+      this.proxy = {
+        random: () => {
+          return random()
+        }
+      }
+    }
+
+    setSeed(seed) {
+      randomSeed(seed);
+    }
+
+    random() {
+      let r = this.proxy.random();
+      // console.log({ r });
+      return r;
+    }
+  }
+
+  let rng = new P5Random();
+  rng.setSeed(10);
   // Create canvas
   createCanvas(tileX * tileWidth, tileY * tileHeight);
 
@@ -294,11 +319,18 @@ function setup() {
     const grid = new Schrodinger.SquareGrid(tileX, tileY);
     wfc = new Schrodinger.WFC(TILES, grid, {
       maxRetries: 10,
-      logLevel: Schrodinger.LogLevel.INFO
+      logLevel: Schrodinger.LogLevel.DEBUG,
+      random: rng
     });
 
-    // Start WFC
-    wfc.start();
+
+    wfc.on('collapse', (cell) => {
+      // console.log(`Collapsed cell: ${cell.id}: ${cell.choices[0].id} (${cell.choices[0].adjacencies})`);
+      console.log({ cell });
+      for (let c of cell.cells) {
+        console.log(`${c.coords[0]}, ${c.coords[1]}: ${c.value}`, c.value)
+      }
+    });
 
     // Listen for completion
     wfc.on('complete', () => {
@@ -315,13 +347,16 @@ function setup() {
     preview = true;
     previewTiles();
   }
+
+  // Start WFC
+  wfc.start();
 }
 
 // p5.js draw function
 function draw() {
   if (preview) return;
 
-  background(200);
+  background('green');
 
   // Draw the current state of the grid
   for (const [cell, coords] of wfc.iterate()) {
@@ -332,6 +367,11 @@ function draw() {
       push();
       translate(x, y);
       cell.choices[0].draw(tileWidth, tileHeight);
+      // Draw the tile name in the center of the tile
+      // fill(0);
+      // textAlign(CENTER, CENTER);
+      // text(cell.choices[0].name, tileWidth / 2, tileHeight / 2);
+      // console.log(`${coords[0]}, ${coords[1]} | Adjacencies: ${cell.choices[0].adjacencies} --- ${cell.choices[0].id}`);
       pop();
     } else {
       // Draw uncollapsed cells
@@ -345,14 +385,15 @@ function draw() {
   }
 
   // If not done, continue collapsing
-  if (!done && frameCount % 5 === 0) {
-    try {
-      wfc.processCollapseQueue();
-    } catch (e) {
-      console.error('Error during collapse:', e);
-      done = true;
-    }
-  }
+  // if (!done && frameCount % 5 === 0) {
+  //   try {
+  //     wfc.processCollapseQueue();
+  //   } catch (e) {
+  //     console.error('Error during collapse:', e);
+  //     done = true;
+  //   }
+  // }
+  // noLoop();
 }
 
 // Preview all generated tiles
@@ -419,18 +460,18 @@ function keyPressed() {
       }
     }
   } else if (key === 'R' || key === 'r') {
-    try {
-      // Restart WFC
-      const grid = new Schrodinger.SquareGrid(tileX, tileY);
-      wfc = new Schrodinger.WFC(TILES, grid, {
-        maxRetries: 10,
-        logLevel: Schrodinger.LogLevel.INFO
-      });
+    // try {
+    //   // Restart WFC
+    //   const grid = new Schrodinger.SquareGrid(tileX, tileY);
+    //   wfc = new Schrodinger.WFC(TILES, grid, {
+    //     maxRetries: 10,
+    //     logLevel: Schrodinger.LogLevel.INFO
+    //   });
 
-      done = false;
-      wfc.start();
-    } catch (error) {
-      console.error('Error restarting WFC:', error);
-    }
+    //   done = false;
+    //   wfc.start();
+    // } catch (error) {
+    //   console.error('Error restarting WFC:', error);
+    // }
   }
 }
