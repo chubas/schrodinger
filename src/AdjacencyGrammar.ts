@@ -45,29 +45,6 @@ export interface ChoiceRule extends Rule {
 }
 
 /**
- * Type guard functions for each rule type
- */
-export function isSimpleRule(rule: Rule): rule is SimpleRule {
-  return rule.type === RuleType.Simple;
-}
-
-export function isNegatedRule(rule: Rule): rule is NegatedRule {
-  return rule.type === RuleType.Negated;
-}
-
-export function isDirectionalRule(rule: Rule): rule is DirectionalRule {
-  return rule.type === RuleType.Directional;
-}
-
-export function isCompoundRule(rule: Rule): rule is CompoundRule {
-  return rule.type === RuleType.Compound;
-}
-
-export function isChoiceRule(rule: Rule): rule is ChoiceRule {
-  return rule.type === RuleType.Choice;
-}
-
-/**
  * Creates a Parsimmon parser for adjacency rules
  */
 const createAdjacencyParser = () => {
@@ -127,10 +104,10 @@ const createAdjacencyParser = () => {
     if (rest.length === 0) return first;
     
     // If first is already a compound rule, extend it
-    if (isCompoundRule(first)) {
+    if (first.type === RuleType.Compound) {
       return {
         type: RuleType.Compound,
-        values: [...first.values, ...rest]
+        values: [...(first as CompoundRule).values, ...rest]
       };
     }
     
@@ -152,10 +129,10 @@ const createAdjacencyParser = () => {
     if (rest.length === 0) return first;
     
     // If first is already a choice rule, extend it
-    if (isChoiceRule(first)) {
+    if (first.type === RuleType.Choice) {
       return {
         type: RuleType.Choice,
-        values: [...first.values, ...rest]
+        values: [...(first as ChoiceRule).values, ...rest]
       };
     }
     
@@ -186,62 +163,6 @@ export function parseAdjacencyRule(input: string): Rule | Error {
     const failure = result as P.Failure;
     return new Error(`Parse error at position ${failure.index.offset}: ${failure.expected.join(', ')}`);
   }
-}
-
-/**
- * Checks if two rules match according to the adjacency rules
- * @param ruleA First rule to compare
- * @param ruleB Second rule to compare
- * @returns True if the rules match, false otherwise
- */
-export function matchRules(ruleA: Rule, ruleB: Rule): boolean {
-  // Simple rules match if they have the same value
-  if (isSimpleRule(ruleA) && isSimpleRule(ruleB)) {
-    // return ruleA.value === ruleB.value;
-    return (ruleA as SimpleRule).value === (ruleB as SimpleRule).value;
-  }
-  
-  // Negated rules match if the contained rules don't match
-  if (isNegatedRule(ruleA)) {
-    return !matchRules((ruleA as NegatedRule).value, ruleB);
-  }
-  if (isNegatedRule(ruleB)) {
-    return !matchRules(ruleA, (ruleB as NegatedRule).value);
-  }
-  
-  // Directional rules match if origin from one matches destination from other and vice versa
-  if (isDirectionalRule(ruleA) && isDirectionalRule(ruleB)) {
-    // Cast to directional rules
-    const directionalA = ruleA as DirectionalRule;
-    const directionalB = ruleB as DirectionalRule;
-    return matchRules(directionalA.origin, directionalB.destination) && 
-           matchRules(directionalA.destination, directionalB.origin);
-  }
-  
-  // Compound rules match if they have the same number of elements and each matches in order
-  if (isCompoundRule(ruleA) && isCompoundRule(ruleB)) {
-    // Cast to compound rules
-    const compoundA = ruleA as CompoundRule;
-    const compoundB = ruleB as CompoundRule;
-    if (compoundA.values.length !== compoundB.values.length) {
-      return false;
-    }
-    
-    return compoundA.values.every((valueA, index) => 
-      matchRules(valueA, compoundB.values[index])
-    );
-  }
-  
-  // Choice rules match if any of their values match
-  if (isChoiceRule(ruleA)) {
-    return (ruleA as ChoiceRule).values.some(valueA => matchRules(valueA, ruleB));
-  }
-  if (isChoiceRule(ruleB)) {
-    return (ruleB as ChoiceRule).values.some(valueB => matchRules(ruleA, valueB));
-  }
-  
-  // If types don't match, they don't match
-  return false;
 }
 
 /**

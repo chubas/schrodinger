@@ -10,11 +10,19 @@ export { RandomLib, DefaultRandom } from './RandomLib.js';
 export { TilesetImporter } from './TilesetImporter.js';
 
 // Adjacency components
-export { matchAdjacencies, matchAdjacenciesStandard } from './Adjacencies.js';
-export { AdjacencyBitset, AdjacencyRegistry } from './AdjacencyBitset.js';
-export { AdjacencyBitsetAdapter } from './AdjacencyBitsetAdapter.js';
+export { matchAdjacencies } from './Adjacencies.js';
+export { 
+  parseAdjacencyRule, 
+  matchRules, 
+  RuleType, 
+  Rule, 
+  SimpleRule, 
+  NegatedRule, 
+  CompoundRule, 
+  DirectionalRule, 
+  ChoiceRule 
+} from './AdjacencyGrammar.js';
 
 // Types
-export type { SimpleAdjacency, DirectionalAdjacency, CompoundAdjacency, AdjacencyRule } from './Adjacencies.js';
 export type { Cell, Grid, GridSnapshot } from './Grid.js';
 export type { WFCOptions, CellCollapse, CollapseGroup, CollapseResult, WFCEvents, DeltaChange, CellDelta, DeltaSnapshot } from './WFC.js';

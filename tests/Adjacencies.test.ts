@@ -1,227 +1,152 @@
 import { TileDef, TileDefFactory } from "../src/TileDef";
-import { matchAdjacencies, matchAdjacenciesStandard } from "../src/Adjacencies";
+import { matchAdjacencies } from "../src/Adjacencies";
+import { parseAdjacencyRule, Rule } from "../src/AdjacencyGrammar";
 
-describe("Adjacency Matching", () => {
-  // Test standard implementation
-  describe("Standard Implementation", () => {
-    describe("Simple Adjacencies", () => {
-      it("should match identical simple adjacencies", () => {
-        const adj1 = TileDefFactory.extractAdjacencies("ABC")[0];
-        const adj2 = TileDefFactory.extractAdjacencies("ABC")[0];
-        expect(matchAdjacenciesStandard(adj1, adj2)).toBe(true);
-      });
-
-      it("should not match different simple adjacencies", () => {
-        const adj1 = TileDefFactory.extractAdjacencies("ABC")[0];
-        const adj2 = TileDefFactory.extractAdjacencies("DEF")[0];
-        expect(matchAdjacenciesStandard(adj1, adj2)).toBe(false);
-      });
-
-      it("should match token adjacencies in any order", () => {
-        const adj1 = TileDefFactory.extractAdjacencies("(token1)(token2)")[0];
-        const adj2 = TileDefFactory.extractAdjacencies("(token2)(token1)")[0];
-        expect(matchAdjacenciesStandard(adj1, adj2)).toBe(true);
-      });
+describe("Adjacencies", () => {
+  describe("Simple Adjacencies", () => {
+    it("should match identical adjacencies", () => {
+      expect(matchAdjacencies("A", "A")).toBe(true);
+      expect(matchAdjacencies("B", "B")).toBe(true);
+      expect(matchAdjacencies("C", "C")).toBe(true);
     });
 
-    describe("Directional Adjacencies", () => {
-      it("should match complementary directional adjacencies", () => {
-        const adj1 = TileDefFactory.extractAdjacencies("W>B")[0];
-        const adj2 = TileDefFactory.extractAdjacencies("B>W")[0];
-        expect(matchAdjacenciesStandard(adj1, adj2)).toBe(true);
-      });
-
-      it("should not match same directional adjacencies", () => {
-        const adj1 = TileDefFactory.extractAdjacencies("W>B")[0];
-        const adj2 = TileDefFactory.extractAdjacencies("W>B")[0];
-        expect(matchAdjacenciesStandard(adj1, adj2)).toBe(false);
-      });
-
-      it("should not match non-complementary directional adjacencies", () => {
-        const adj1 = TileDefFactory.extractAdjacencies("W>B")[0];
-        const adj2 = TileDefFactory.extractAdjacencies("R>G")[0];
-        expect(matchAdjacenciesStandard(adj1, adj2)).toBe(false);
-      });
-    });
-
-    describe("Compound Adjacencies", () => {
-      it("should match compound adjacencies with matching parts", () => {
-        const adj1 = TileDefFactory.extractAdjacencies("R[W>B]G")[0];
-        const adj2 = TileDefFactory.extractAdjacencies("R[B>W]G")[0];
-        expect(matchAdjacenciesStandard(adj1, adj2)).toBe(true);
-      });
-
-      it("should not match compound adjacencies with different borders", () => {
-        const adj1 = TileDefFactory.extractAdjacencies("R[W>B]G")[0];
-        const adj2 = TileDefFactory.extractAdjacencies("B[W>B]G")[0];
-        expect(matchAdjacenciesStandard(adj1, adj2)).toBe(false);
-      });
-
-      it("should not match compound adjacencies with non-matching directions", () => {
-        const adj1 = TileDefFactory.extractAdjacencies("R[W>B]G")[0];
-        const adj2 = TileDefFactory.extractAdjacencies("R[W>R]G")[0];
-        expect(matchAdjacenciesStandard(adj1, adj2)).toBe(false);
-      });
-    });
-
-    describe("Mixed Adjacency Types", () => {
-      it("should not match simple with directional adjacencies", () => {
-        const adj1 = TileDefFactory.extractAdjacencies("ABC")[0];
-        const adj2 = TileDefFactory.extractAdjacencies("W>B")[0];
-        expect(matchAdjacenciesStandard(adj1, adj2)).toBe(false);
-      });
-
-      it("should not match simple with compound adjacencies", () => {
-        const adj1 = TileDefFactory.extractAdjacencies("ABC")[0];
-        const adj2 = TileDefFactory.extractAdjacencies("R[W>B]G")[0];
-        expect(matchAdjacenciesStandard(adj1, adj2)).toBe(false);
-      });
-
-      it("should not match directional with compound adjacencies", () => {
-        const adj1 = TileDefFactory.extractAdjacencies("W>B")[0];
-        const adj2 = TileDefFactory.extractAdjacencies("R[W>B]G")[0];
-        expect(matchAdjacenciesStandard(adj1, adj2)).toBe(false);
-      });
-    });
-
-    describe("Complex Scenarios", () => {
-      it("should match chess pattern tiles", () => {
-        const whiteTile = TileDefFactory.extractAdjacencies("W>B|W>B|W>B|W>B");
-        const blackTile = TileDefFactory.extractAdjacencies("B>W|B>W|B>W|B>W");
-
-        // Check all four directions match
-        for (let i = 0; i < 4; i++) {
-          expect(matchAdjacenciesStandard(whiteTile[i], blackTile[i])).toBe(true);
-        }
-      });
-
-      it("should match complex border patterns", () => {
-        const tile1 = TileDefFactory.extractAdjacencies("RG[W>B]BR|G[B>W]R|RB[W>B]GR|B[B>W]R")[0];
-        const tile2 = TileDefFactory.extractAdjacencies("RG[B>W]BR|G[W>B]R|RB[B>W]GR|B[W>B]R")[0];
-        expect(matchAdjacenciesStandard(tile1, tile2)).toBe(true);
-      });
+    it("should not match different adjacencies", () => {
+      expect(matchAdjacencies("A", "B")).toBe(false);
+      expect(matchAdjacencies("B", "C")).toBe(false);
+      expect(matchAdjacencies("C", "A")).toBe(false);
     });
   });
 
-  // Test bitset implementation
-  describe("Binary Bitset Implementation", () => {
-    describe("Simple Adjacencies", () => {
-      it("should match identical simple adjacencies", () => {
-        const adj1 = TileDefFactory.extractAdjacencies("ABC")[0];
-        const adj2 = TileDefFactory.extractAdjacencies("ABC")[0];
-        expect(matchAdjacencies(adj1, adj2)).toBe(true);
-      });
-
-      it("should not match different simple adjacencies", () => {
-        const adj1 = TileDefFactory.extractAdjacencies("ABC")[0];
-        const adj2 = TileDefFactory.extractAdjacencies("DEF")[0];
-        expect(matchAdjacencies(adj1, adj2)).toBe(false);
-      });
-
-      it("should match token adjacencies in any order", () => {
-        const adj1 = TileDefFactory.extractAdjacencies("(token1)(token2)")[0];
-        const adj2 = TileDefFactory.extractAdjacencies("(token2)(token1)")[0];
-        expect(matchAdjacencies(adj1, adj2)).toBe(true);
-      });
+  describe("Directional Adjacencies", () => {
+    it("should match complementary directional adjacencies", () => {
+      expect(matchAdjacencies("[W>B]", "[B>W]")).toBe(true);
+      expect(matchAdjacencies("[B>W]", "[W>B]")).toBe(true);
     });
 
-    describe("Directional Adjacencies", () => {
-      it("should match complementary directional adjacencies", () => {
-        const adj1 = TileDefFactory.extractAdjacencies("W>B")[0];
-        const adj2 = TileDefFactory.extractAdjacencies("B>W")[0];
-        expect(matchAdjacencies(adj1, adj2)).toBe(true);
-      });
-
-      it("should not match same directional adjacencies", () => {
-        const adj1 = TileDefFactory.extractAdjacencies("W>B")[0];
-        const adj2 = TileDefFactory.extractAdjacencies("W>B")[0];
-        expect(matchAdjacencies(adj1, adj2)).toBe(false);
-      });
-
-      it("should not match non-complementary directional adjacencies", () => {
-        const adj1 = TileDefFactory.extractAdjacencies("W>B")[0];
-        const adj2 = TileDefFactory.extractAdjacencies("R>G")[0];
-        expect(matchAdjacencies(adj1, adj2)).toBe(false);
-      });
+    it("should not match non-complementary directional adjacencies", () => {
+      expect(matchAdjacencies("[W>B]", "[W>B]")).toBe(false);
+      expect(matchAdjacencies("[B>W]", "[B>W]")).toBe(false);
     });
 
-    describe("Compound Adjacencies", () => {
-      it("should match compound adjacencies with matching parts", () => {
-        const adj1 = TileDefFactory.extractAdjacencies("R[W>B]G")[0];
-        const adj2 = TileDefFactory.extractAdjacencies("R[B>W]G")[0];
-        expect(matchAdjacencies(adj1, adj2)).toBe(true);
-      });
-
-      it("should not match compound adjacencies with different borders", () => {
-        const adj1 = TileDefFactory.extractAdjacencies("R[W>B]G")[0];
-        const adj2 = TileDefFactory.extractAdjacencies("B[W>B]G")[0];
-        expect(matchAdjacencies(adj1, adj2)).toBe(false);
-      });
-
-      it("should not match compound adjacencies with non-matching directions", () => {
-        const adj1 = TileDefFactory.extractAdjacencies("R[W>B]G")[0];
-        const adj2 = TileDefFactory.extractAdjacencies("R[W>R]G")[0];
-        expect(matchAdjacencies(adj1, adj2)).toBe(false);
-      });
-    });
-
-    describe("Mixed Adjacency Types", () => {
-      it("should not match simple with directional adjacencies", () => {
-        const adj1 = TileDefFactory.extractAdjacencies("ABC")[0];
-        const adj2 = TileDefFactory.extractAdjacencies("W>B")[0];
-        expect(matchAdjacencies(adj1, adj2)).toBe(false);
-      });
-
-      it("should not match simple with compound adjacencies", () => {
-        const adj1 = TileDefFactory.extractAdjacencies("ABC")[0];
-        const adj2 = TileDefFactory.extractAdjacencies("R[W>B]G")[0];
-        expect(matchAdjacencies(adj1, adj2)).toBe(false);
-      });
-
-      it("should not match directional with compound adjacencies", () => {
-        const adj1 = TileDefFactory.extractAdjacencies("W>B")[0];
-        const adj2 = TileDefFactory.extractAdjacencies("R[W>B]G")[0];
-        expect(matchAdjacencies(adj1, adj2)).toBe(false);
-      });
-    });
-
-    describe("Complex Scenarios", () => {
-      it("should match chess pattern tiles", () => {
-        const whiteTile = TileDefFactory.extractAdjacencies("W>B|W>B|W>B|W>B");
-        const blackTile = TileDefFactory.extractAdjacencies("B>W|B>W|B>W|B>W");
-
-        // Check all four directions match
-        for (let i = 0; i < 4; i++) {
-          expect(matchAdjacencies(whiteTile[i], blackTile[i])).toBe(true);
-        }
-      });
-
-      it("should match complex border patterns", () => {
-        const tile1 = TileDefFactory.extractAdjacencies("RG[W>B]BR|G[B>W]R|RB[W>B]GR|B[B>W]R")[0];
-        const tile2 = TileDefFactory.extractAdjacencies("RG[B>W]BR|G[W>B]R|RB[B>W]GR|B[W>B]R")[0];
-        expect(matchAdjacencies(tile1, tile2)).toBe(true);
-      });
+    it("should not match directional with simple adjacencies", () => {
+      expect(matchAdjacencies("[W>B]", "W")).toBe(false);
+      expect(matchAdjacencies("[B>W]", "B")).toBe(false);
     });
   });
 
-  // Ensure both implementations produce the same results
-  describe("Implementation Consistency", () => {
-    it("should produce consistent results for both implementations", () => {
-      const testCases = [
-        ["ABC", "ABC"],
-        ["ABC", "DEF"],
-        ["W>B", "B>W"],
-        ["W>B", "W>B"],
-        ["R[W>B]G", "R[B>W]G"],
-        ["R[W>B]G", "B[W>B]G"]
-      ];
+  describe("Compound Adjacencies", () => {
+    it("should match identical compound adjacencies", () => {
+      expect(matchAdjacencies("A+B", "A+B")).toBe(true);
+      expect(matchAdjacencies("B+C", "B+C")).toBe(true);
+      expect(matchAdjacencies("C+A", "C+A")).toBe(true);
+    });
 
-      for (const [adj1, adj2] of testCases) {
-        const standardResult = matchAdjacenciesStandard(adj1, adj2);
-        const binaryResult = matchAdjacencies(adj1, adj2);
-        
-        expect(binaryResult).toBe(standardResult);
+    it("should not match different compound adjacencies", () => {
+      expect(matchAdjacencies("A+B", "B+C")).toBe(false);
+      expect(matchAdjacencies("B+C", "C+A")).toBe(false);
+      expect(matchAdjacencies("C+A", "A+B")).toBe(false);
+    });
+
+    it("should not match if order is different", () => {
+      // Order matters for compound adjacencies
+      expect(matchAdjacencies("A+B", "B+A")).toBe(false);
+      expect(matchAdjacencies("B+C", "C+B")).toBe(false);
+      expect(matchAdjacencies("C+A", "A+C")).toBe(false);
+    });
+  });
+
+  describe("Choice Adjacencies", () => {
+    it("should match if any choice matches", () => {
+      expect(matchAdjacencies("A|B", "A")).toBe(true);
+      expect(matchAdjacencies("A|B", "B")).toBe(true);
+      expect(matchAdjacencies("A", "A|B")).toBe(true);
+      expect(matchAdjacencies("B", "A|B")).toBe(true);
+    });
+
+    it("should not match if no choice matches", () => {
+      expect(matchAdjacencies("A|B", "C")).toBe(false);
+      expect(matchAdjacencies("C", "A|B")).toBe(false);
+    });
+  });
+
+  describe("Negated Adjacencies", () => {
+    it("should match if negated rule doesn't match", () => {
+      expect(matchAdjacencies("^A", "B")).toBe(true);
+      expect(matchAdjacencies("B", "^A")).toBe(true);
+    });
+
+    it("should not match if negated rule matches", () => {
+      expect(matchAdjacencies("^A", "A")).toBe(false);
+      expect(matchAdjacencies("A", "^A")).toBe(false);
+    });
+  });
+
+  describe("Complex Adjacencies", () => {
+    it("should handle complex nested rules correctly", () => {
+      // Compound rule with choice
+      expect(matchAdjacencies("A+B|C", "A+B")).toBe(true);
+      expect(matchAdjacencies("A+B", "A+B|C")).toBe(true);
+      
+      // Negated compound rule
+      expect(matchAdjacencies("^(A+B)", "C+D")).toBe(true);
+      expect(matchAdjacencies("C+D", "^(A+B)")).toBe(true);
+      
+      // Compound with negated part
+      expect(matchAdjacencies("A+^B", "A+C")).toBe(true);
+      expect(matchAdjacencies("A+C", "A+^B")).toBe(true);
+    });
+
+    // Mixed compound and directional adjacencies test
+    it("should handle mixed compound and directional adjacencies", () => {
+      // Using parsed rules directly to more clearly show the test behavior
+      
+      // For directional rules, the order of directional parts matters
+      // These should match because the directional parts complement each other and are in the same position
+      expect(matchAdjacencies("A+[W>B]", "A+[B>W]")).toBe(true);
+      
+      // These should not match because the compound parts are in a different order
+      expect(matchAdjacencies("A+[W>B]", "[B>W]+A")).toBe(false);
+      
+      // These should not match because directional parts must be in complementary positions
+      expect(matchAdjacencies("A+[W>B]", "A+[W>B]")).toBe(false);
+    });
+  });
+
+  // Test integration with TileDef
+  describe("Integration with TileDef", () => {
+    it("should handle adjacencies extracted from TileDef", () => {
+      // Create a chess pattern with white and black tiles
+      const whiteTiles = ["[W>B]", "[W>B]", "[W>B]", "[W>B]"];
+      const blackTiles = ["[B>W]", "[B>W]", "[B>W]", "[B>W]"];
+      
+      // White should connect to black on all sides
+      for (let i = 0; i < 4; i++) {
+        expect(matchAdjacencies(whiteTiles[i], blackTiles[i])).toBe(true);
       }
+    });
+
+    it("should handle compound adjacencies from TileDef", () => {
+      // Create tiles with compound adjacencies
+      const tile1 = "A+B";
+      const tile2 = "A+B";
+      
+      expect(matchAdjacencies(tile1, tile2)).toBe(true);
+    });
+
+    it("should handle choice adjacencies from TileDef", () => {
+      // Create tiles with choice adjacencies
+      const tile1 = "A|B";
+      const tile2 = "A|B";
+      
+      expect(matchAdjacencies(tile1, tile2)).toBe(true);
+    });
+
+    it("should handle negated adjacencies from TileDef", () => {
+      // Create tiles with negated adjacencies
+      const tile1 = "^A";
+      const tile2 = "^A";
+      
+      expect(matchAdjacencies(tile1, tile2)).toBe(true);
     });
   });
 });

@@ -1,6 +1,5 @@
 import { 
   parseAdjacencyRule, 
-  matchRules, 
   RuleType,
   createSimpleRule,
   createNegatedRule,
@@ -9,6 +8,7 @@ import {
   createChoiceRule,
   Rule
 } from '../src/AdjacencyGrammar';
+import { matchRules } from '../src/Adjacencies';
 
 describe('Adjacency Grammar Parser', () => {
   // Simple rule parsing

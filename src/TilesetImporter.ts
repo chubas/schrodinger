@@ -1,87 +1,88 @@
-import fs from 'fs';
-import path from 'path';
+import * as fs from 'fs';
+import * as path from 'path';
 import { TileDef, TileDefFactory } from './TileDef';
 
+/**
+ * Interface for tileset definition files
+ */
 export interface TilesetDefinition {
-  tiles: Array<{
+  tiles: {
     name: string;
     adjacencies: string[];
     weight?: number;
     rotation?: number;
-    reflection?: number;
-  }>;
+    reflection?: boolean;
+    draw?: () => void;
+  }[];
 }
 
+/**
+ * Imports tileset definitions from JSON files
+ */
 export class TilesetImporter {
   /**
-   * Imports a tileset from a JSON file
-   * @param filePath - Absolute path to the JSON file
+   * Loads a tileset from a JSON file
+   * @param filepath Path to the JSON file
    * @returns Array of TileDef objects
    */
-  static importFromFile(filePath: string): TileDef[] {
+  static loadFromFile(filepath: string): TileDef[] {
+    const fullPath = path.resolve(filepath);
+    
+    if (!fs.existsSync(fullPath)) {
+      throw new Error(`Tileset file not found: ${fullPath}`);
+    }
+    
     try {
-      // Read and parse the JSON file
-      const fileContent = fs.readFileSync(filePath, 'utf8');
-      const tilesetDefinition = JSON.parse(fileContent) as TilesetDefinition;
-
-      // Validate the tileset structure
-      if (!tilesetDefinition.tiles || !Array.isArray(tilesetDefinition.tiles)) {
-        throw new Error('Invalid tileset format: missing or invalid tiles array');
-      }
-
-      // Convert each tile definition to a TileDef object
+      const tilesetStr = fs.readFileSync(fullPath, 'utf8');
+      const tilesetDefinition = JSON.parse(tilesetStr) as TilesetDefinition;
+      
       return tilesetDefinition.tiles.map(tileDef => {
-        if (!tileDef.name || !tileDef.adjacencies || !Array.isArray(tileDef.adjacencies)) {
-          throw new Error(`Invalid tile definition: ${JSON.stringify(tileDef)}`);
-        }
-
-        // Create a complete tile definition with all properties
-        return {
-          name: tileDef.name,
-          adjacencies: tileDef.adjacencies,
-          weight: tileDef.weight,
-          rotation: tileDef.rotation,
-          reflection: tileDef.reflection,
-          draw: () => {} // Default empty draw function
-        };
+        return TileDefFactory.defineTile(
+          tileDef.name,
+          tileDef.adjacencies,
+          tileDef.draw ?? (() => {}),
+          tileDef.weight,
+          tileDef.rotation,
+          tileDef.reflection
+        );
       });
-    } catch (error) {
-      if (error instanceof Error) {
-        throw new Error(`Failed to import tileset: ${error.message}`);
-      }
-      throw error; // Re-throw the original error to preserve stack trace
+    } catch (e) {
+      throw new Error(`Failed to load tileset from ${fullPath}: ${e}`);
     }
   }
 
   /**
-   * Imports multiple tilesets from a directory
-   * @param directoryPath - Absolute path to the directory containing JSON files
-   * @param filePattern - Optional regex pattern to filter files (defaults to all .json files)
-   * @returns Object mapping tileset names (filenames without extension) to arrays of TileDef objects
+   * Imports all tilesets from a directory
+   * @param directoryPath Path to the directory containing tileset JSON files
+   * @param filePattern Optional regex pattern to filter files
+   * @returns Object mapping tileset names to arrays of TileDef objects
    */
   static importFromDirectory(directoryPath: string, filePattern = /\.json$/): Record<string, TileDef[]> {
-    try {
-      const files = fs.readdirSync(directoryPath)
-        .filter(file => filePattern.test(file));
-
-      if (files.length === 0) {
-        throw new Error(`No matching files found in directory: ${directoryPath}`);
-      }
-
-      const tilesets: Record<string, TileDef[]> = {};
-
-      for (const file of files) {
-        const filePath = path.join(directoryPath, file);
-        const tilesetName = path.basename(file, path.extname(file));
-        tilesets[tilesetName] = this.importFromFile(filePath);
-      }
-
-      return tilesets;
-    } catch (error) {
-      if (error instanceof Error) {
-        throw new Error(`Failed to import tilesets from directory: ${error.message}`);
-      }
-      throw error; // Re-throw the original error to preserve stack trace
+    const fullPath = path.resolve(directoryPath);
+    
+    if (!fs.existsSync(fullPath)) {
+      throw new Error(`Directory not found: ${fullPath}`);
     }
+    
+    const files = fs.readdirSync(fullPath).filter(file => filePattern.test(file));
+    
+    if (files.length === 0) {
+      throw new Error(`No matching files found in directory: ${fullPath}`);
+    }
+    
+    const tilesets: Record<string, TileDef[]> = {};
+    
+    for (const file of files) {
+      const filePath = path.join(fullPath, file);
+      const tilesetName = path.basename(file, path.extname(file));
+      
+      try {
+        tilesets[tilesetName] = this.loadFromFile(filePath);
+      } catch (e) {
+        console.warn(`Failed to import tileset from ${filePath}: ${e}`);
+      }
+    }
+    
+    return tilesets;
   }
 }

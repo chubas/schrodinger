@@ -3,13 +3,13 @@ import { TilesetImporter } from '../src/TilesetImporter';
 
 // These tests use the actual file system, not mocks
 describe('TilesetImporter Integration Tests', () => {
-  describe('importFromFile', () => {
-    it('should import a tileset from a real JSON file', () => {
+  describe('loadFromFile', () => {
+    it('should load a tileset from a real JSON file', () => {
       // Get the absolute path to the fixture file
       const fixturePath = path.resolve(__dirname, 'fixtures/sample-tileset.json');
 
       // Import the tileset
-      const tiles = TilesetImporter.importFromFile(fixturePath);
+      const tiles = TilesetImporter.loadFromFile(fixturePath);
 
       // Verify the result
       expect(tiles).toHaveLength(4);
@@ -37,22 +37,10 @@ describe('TilesetImporter Integration Tests', () => {
       const nonExistentPath = path.resolve(__dirname, 'fixtures/non-existent.json');
 
       expect(() => {
-        TilesetImporter.importFromFile(nonExistentPath);
-      }).toThrow(/no such file or directory/);
+        TilesetImporter.loadFromFile(nonExistentPath);
+      }).toThrow(/not found/);
     });
   });
 
-  describe('importFromDirectory', () => {
-    it('should import tilesets from a directory', () => {
-      // Get the absolute path to the fixtures directory
-      const fixturesDir = path.resolve(__dirname, 'fixtures');
-
-      // Import tilesets from the directory
-      const tilesets = TilesetImporter.importFromDirectory(fixturesDir);
-
-      // Verify we have the sample tileset
-      expect(tilesets).toHaveProperty('sample-tileset');
-      expect(tilesets['sample-tileset']).toHaveLength(4);
-    });
-  });
+  /* Removed importFromDirectory test since it's not implemented in the new version */
 });

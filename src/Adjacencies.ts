@@ -1,117 +1,110 @@
-import { TileDefFactory } from "./TileDef.js";
-import { AdjacencyBitsetAdapter } from "./AdjacencyBitsetAdapter.js";
+import { Rule, parseAdjacencyRule, RuleType, SimpleRule, NegatedRule, DirectionalRule, CompoundRule, ChoiceRule } from "./AdjacencyGrammar";
 
-export type SimpleAdjacency = string[];
-
-export type DirectionalAdjacency = {
-  from: string;
-  to: string;
-};
-
-export type CompoundAdjacency = (string | DirectionalAdjacency)[];
-
-export type AdjacencyRule =
-  | SimpleAdjacency
-  | DirectionalAdjacency
-  | CompoundAdjacency;
-
-function isSimpleAdjacency(adj: AdjacencyRule): adj is SimpleAdjacency {
-  return Array.isArray(adj) && adj.every((item) => typeof item === "string");
+/**
+ * Type guard functions for each rule type
+ */
+export function isSimpleRule(rule: Rule): rule is SimpleRule {
+  return rule.type === RuleType.Simple;
 }
 
-function isDirectionalAdjacency(
-  adj: AdjacencyRule,
-): adj is DirectionalAdjacency {
-  return !Array.isArray(adj) && "from" in adj && "to" in adj;
+export function isNegatedRule(rule: Rule): rule is NegatedRule {
+  return rule.type === RuleType.Negated;
 }
 
-function isCompoundAdjacency(adj: AdjacencyRule): adj is CompoundAdjacency {
-  return Array.isArray(adj) && adj.some((item) => typeof item !== "string");
+export function isDirectionalRule(rule: Rule): rule is DirectionalRule {
+  return rule.type === RuleType.Directional;
 }
 
-function matchSimpleAdjacencies(
-  adj1: SimpleAdjacency,
-  adj2: SimpleAdjacency,
-): boolean {
-  // For simple adjacencies, all tokens must match (order doesn't matter)
-  if (adj1.length !== adj2.length) return false;
-
-  const tokens1 = new Set(adj1);
-  return adj2.every((token) => tokens1.has(token));
+export function isCompoundRule(rule: Rule): rule is CompoundRule {
+  return rule.type === RuleType.Compound;
 }
 
-function matchDirectionalAdjacencies(
-  adj1: DirectionalAdjacency,
-  adj2: DirectionalAdjacency,
-): boolean {
-  // Directional adjacencies match if they are complementary
-  return adj1.from === adj2.to && adj1.to === adj2.from;
+export function isChoiceRule(rule: Rule): rule is ChoiceRule {
+  return rule.type === RuleType.Choice;
 }
 
-function matchCompoundAdjacencies(
-  adj1: CompoundAdjacency,
-  adj2: CompoundAdjacency,
-): boolean {
-  if (adj1.length !== adj2.length) return false;
-  // For each position, if both are strings they must match exactly
-  // If both are directional, they must be complementary
-  // If they're different types, no match
-  for (let i = 0; i < adj1.length; i++) {
-    const item1 = adj1[i];
-    const item2 = adj2[i];
-
-    if (typeof item1 === "string" && typeof item2 === "string") {
-      if (item1 !== item2) return false;
-    } else if (typeof item1 === "object" && typeof item2 === "object") {
-      if (!matchDirectionalAdjacencies(item1, item2)) return false;
-    } else {
+/**
+ * Checks if two rules match according to the adjacency rules
+ * @param ruleA First rule to compare
+ * @param ruleB Second rule to compare
+ * @returns True if the rules match, false otherwise
+ */
+export function matchRules(ruleA: Rule, ruleB: Rule): boolean {
+  // Simple rules match if they have the same value
+  if (isSimpleRule(ruleA) && isSimpleRule(ruleB)) {
+    return (ruleA as SimpleRule).value === (ruleB as SimpleRule).value;
+  }
+  
+  // Negated rules match if the contained rules don't match
+  if (isNegatedRule(ruleA)) {
+    return !matchRules((ruleA as NegatedRule).value, ruleB);
+  }
+  if (isNegatedRule(ruleB)) {
+    return !matchRules(ruleA, (ruleB as NegatedRule).value);
+  }
+  
+  // Directional rules match if origin from one matches destination from other and vice versa
+  if (isDirectionalRule(ruleA) && isDirectionalRule(ruleB)) {
+    // Cast to directional rules
+    const directionalA = ruleA as DirectionalRule;
+    const directionalB = ruleB as DirectionalRule;
+    return matchRules(directionalA.origin, directionalB.destination) && 
+           matchRules(directionalA.destination, directionalB.origin);
+  }
+  
+  // Compound rules match if they have the same number of elements and each matches in order
+  if (isCompoundRule(ruleA) && isCompoundRule(ruleB)) {
+    // Cast to compound rules
+    const compoundA = ruleA as CompoundRule;
+    const compoundB = ruleB as CompoundRule;
+    if (compoundA.values.length !== compoundB.values.length) {
       return false;
     }
+    
+    return compoundA.values.every((valueA, index) => 
+      matchRules(valueA, compoundB.values[index])
+    );
   }
-
-  return true;
-}
-
-function matchAdjacenciesOriginal(
-  adj1: string | AdjacencyRule,
-  adj2: string | AdjacencyRule,
-): boolean {
-  // Parse strings into AdjacencyRules
-  const rule1 =
-    typeof adj1 === "string" ? TileDefFactory.parseAdjacencyRule(adj1) : adj1;
-  const rule2 =
-    typeof adj2 === "string" ? TileDefFactory.parseAdjacencyRule(adj2) : adj2;
-
-  // First check if they're the same type
-  if (isSimpleAdjacency(rule1) && isSimpleAdjacency(rule2)) {
-    return matchSimpleAdjacencies(rule1, rule2);
+  
+  // Choice rules match if any of their values match
+  if (isChoiceRule(ruleA)) {
+    return (ruleA as ChoiceRule).values.some(valueA => matchRules(valueA, ruleB));
   }
-
-  if (isDirectionalAdjacency(rule1) && isDirectionalAdjacency(rule2)) {
-    return matchDirectionalAdjacencies(rule1, rule2);
+  if (isChoiceRule(ruleB)) {
+    return (ruleB as ChoiceRule).values.some(valueB => matchRules(ruleA, valueB));
   }
-
-  if (isCompoundAdjacency(rule1) && isCompoundAdjacency(rule2)) {
-    return matchCompoundAdjacencies(rule1, rule2);
-  }
-
-  // Different types never match
+  
+  // If types don't match, they don't match
   return false;
 }
 
-export function matchAdjacencies(
-  adj1: string | AdjacencyRule,
-  adj2: string | AdjacencyRule,
-): boolean {
-  // Use the BitsetAdapter for more efficient matching
-  // const adapter = AdjacencyBitsetAdapter.getInstance();
-  // return adapter.matchAdjacencies(adj1, adj2);
-  return matchAdjacenciesOriginal(adj1, adj2);
-}
-
-export function matchAdjacenciesStandard(
-  adj1: string | AdjacencyRule,
-  adj2: string | AdjacencyRule,
-): boolean {
-  return matchAdjacenciesOriginal(adj1, adj2);
+/**
+ * Matches two adjacency rules to see if they are compatible
+ * Using the new grammar-based approach
+ * 
+ * @param a First adjacency rule as a string
+ * @param b Second adjacency rule as a string
+ * @returns Boolean indicating if the adjacencies match
+ */
+export function matchAdjacencies(a: string, b: string): boolean {
+  try {
+    // Parse adjacency rules using the grammar
+    const ruleA = parseAdjacencyRule(a);
+    if (ruleA instanceof Error) {
+      console.error(`Error parsing adjacency rule "${a}": ${ruleA.message}`);
+      return false;
+    }
+    
+    const ruleB = parseAdjacencyRule(b);
+    if (ruleB instanceof Error) {
+      console.error(`Error parsing adjacency rule "${b}": ${ruleB.message}`);
+      return false;
+    }
+    
+    // Use grammar-based rule matching
+    return matchRules(ruleA, ruleB);
+  } catch (e) {
+    console.error(`Error matching adjacencies "${a}" and "${b}": ${e}`);
+    return false;
+  }
 }

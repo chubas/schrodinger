@@ -604,7 +604,10 @@ export class WFC extends EventEmitter {
             `Neighbor adjacency: ${JSON.stringify(neighborAdjacency)}`,
           );
 
-          if (!matchAdjacencies(cellAdjacency, neighborAdjacency)) {
+          if (!matchAdjacencies(
+            typeof cellAdjacency === 'string' ? cellAdjacency : cellAdjacency.toString(),
+            typeof neighborAdjacency === 'string' ? neighborAdjacency : neighborAdjacency.toString()
+          )) {
             this.log(
               LogLevel.DEBUG,
               "Adjacencies do not match - collapse group is invalid",
@@ -966,7 +969,10 @@ export class WFC extends EventEmitter {
       for (const option of cell.choices) {
         // this.log(LogLevel.DEBUG, `Checking cell option ${option.name} adjacency at ${direction}: ${JSON.stringify(option.adjacencies[direction])}`);
         if (
-          matchAdjacencies(option.adjacencies[direction], neighborAdjacency)
+          matchAdjacencies(
+            typeof option.adjacencies[direction] === 'string' ? option.adjacencies[direction] : option.adjacencies[direction].toString(),
+            typeof neighborAdjacency === 'string' ? neighborAdjacency : neighborAdjacency.toString()
+          )
         ) {
           valid.add(option);
           // this.log(LogLevel.DEBUG, `Added ${option.name} as valid option`);
@@ -988,7 +994,10 @@ export class WFC extends EventEmitter {
           // this.log(LogLevel.DEBUG, `Neighbor option ${neighborOption.name} adjacency at ${oppositeDirection}: ${JSON.stringify(neighborAdjacency)}`);
 
           // Tiles can connect if their adjacencies match
-          if (matchAdjacencies(optionAdjacency, neighborAdjacency)) {
+          if (matchAdjacencies(
+            typeof optionAdjacency === 'string' ? optionAdjacency : optionAdjacency.toString(),
+            typeof neighborAdjacency === 'string' ? neighborAdjacency : neighborAdjacency.toString()
+          )) {
             valid.add(option);
             // this.log(LogLevel.DEBUG, `Added ${option.name} as valid option`);
             break; // Once we find a valid neighbor, we can stop checking this option
