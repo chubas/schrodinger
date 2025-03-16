@@ -1,0 +1,280 @@
+import * as P from 'parsimmon';
+
+/**
+ * Types representing the different kinds of adjacency rules
+ */
+export enum RuleType {
+  Simple = 'Simple',
+  Negated = 'Negated',
+  Directional = 'Directional',
+  Compound = 'Compound',
+  Choice = 'Choice',
+}
+
+/**
+ * Base interface for all rule types
+ */
+export interface Rule {
+  type: RuleType;
+}
+
+export interface SimpleRule extends Rule {
+  type: RuleType.Simple;
+  value: string;
+}
+
+export interface NegatedRule extends Rule {
+  type: RuleType.Negated;
+  value: Rule;
+}
+
+export interface DirectionalRule extends Rule {
+  type: RuleType.Directional;
+  origin: Rule;
+  destination: Rule;
+}
+
+export interface CompoundRule extends Rule {
+  type: RuleType.Compound;
+  values: Rule[];
+}
+
+export interface ChoiceRule extends Rule {
+  type: RuleType.Choice;
+  values: Rule[];
+}
+
+/**
+ * Type guard functions for each rule type
+ */
+export function isSimpleRule(rule: Rule): rule is SimpleRule {
+  return rule.type === RuleType.Simple;
+}
+
+export function isNegatedRule(rule: Rule): rule is NegatedRule {
+  return rule.type === RuleType.Negated;
+}
+
+export function isDirectionalRule(rule: Rule): rule is DirectionalRule {
+  return rule.type === RuleType.Directional;
+}
+
+export function isCompoundRule(rule: Rule): rule is CompoundRule {
+  return rule.type === RuleType.Compound;
+}
+
+export function isChoiceRule(rule: Rule): rule is ChoiceRule {
+  return rule.type === RuleType.Choice;
+}
+
+/**
+ * Creates a Parsimmon parser for adjacency rules
+ */
+const createAdjacencyParser = () => {
+  // Forward declarations to handle recursion
+  const rule: P.Parser<Rule> = P.lazy(() => P.alt(choiceRule, compoundRule, singleRule));
+  
+  // Simple rule (just text)
+  const simpleRule: P.Parser<SimpleRule> = P.regexp(/[A-Za-z0-9]+/).map(value => ({
+    type: RuleType.Simple,
+    value
+  }));
+  
+  // Negated rule (^Something)
+  const negatedRule: P.Parser<NegatedRule> = P.string('^')
+    .then(P.lazy(() => singleRule))
+    .map(value => ({
+      type: RuleType.Negated,
+      value
+    }));
+  
+  // Directional rule ([A>B])
+  const directionalRule: P.Parser<DirectionalRule> = P.seq(
+    P.string('['),
+    P.lazy(() => rule),
+    P.string('>'),
+    P.lazy(() => rule),
+    P.string(']')
+  ).map(([, origin, , destination]) => ({
+    type: RuleType.Directional,
+    origin,
+    destination
+  }));
+  
+  // Parenthesized rule
+  const parenRule: P.Parser<Rule> = P.seq(
+    P.string('(').skip(P.optWhitespace),
+    P.lazy(() => rule),
+    P.optWhitespace.skip(P.string(')'))
+  ).map(([, r]) => r);
+  
+  // Single rule (one of the basic types)
+  const singleRule: P.Parser<Rule> = P.alt(
+    parenRule,
+    negatedRule,
+    directionalRule,
+    simpleRule
+  );
+  
+  // Compound rule (A+B+C)
+  const compoundRule: P.Parser<Rule> = P.seq(
+    singleRule,
+    P.seq(P.optWhitespace, P.string('+'), P.optWhitespace, singleRule)
+      .map(([,,,r]) => r)
+      .atLeast(1)
+  ).map(([first, rest]) => {
+    // If there's only one component and it's not already a compound, return it
+    if (rest.length === 0) return first;
+    
+    // If first is already a compound rule, extend it
+    if (isCompoundRule(first)) {
+      return {
+        type: RuleType.Compound,
+        values: [...first.values, ...rest]
+      };
+    }
+    
+    // Otherwise create a new compound rule
+    return {
+      type: RuleType.Compound,
+      values: [first, ...rest]
+    };
+  });
+  
+  // Choice rule (A|B|C)
+  const choiceRule: P.Parser<Rule> = P.seq(
+    P.alt(compoundRule, singleRule),
+    P.seq(P.optWhitespace, P.string('|'), P.optWhitespace, P.alt(compoundRule, singleRule))
+      .map(([,,,r]) => r)
+      .atLeast(1)
+  ).map(([first, rest]) => {
+    // If there's only one option, return it
+    if (rest.length === 0) return first;
+    
+    // If first is already a choice rule, extend it
+    if (isChoiceRule(first)) {
+      return {
+        type: RuleType.Choice,
+        values: [...first.values, ...rest]
+      };
+    }
+    
+    // Otherwise create a new choice rule
+    return {
+      type: RuleType.Choice,
+      values: [first, ...rest]
+    };
+  });
+  
+  // The final parser with whitespace handling
+  return P.optWhitespace.then(rule).skip(P.optWhitespace);
+};
+
+/**
+ * Parses an adjacency rule string into the rule object structure
+ * @param input The rule string to parse
+ * @returns The parsed rule or an error
+ */
+export function parseAdjacencyRule(input: string): Rule | Error {
+  const parser = createAdjacencyParser();
+  const result = parser.parse(input);
+  
+  if (result.status) {
+    return result.value;
+  } else {
+    // We need to properly type the failure case
+    const failure = result as P.Failure;
+    return new Error(`Parse error at position ${failure.index.offset}: ${failure.expected.join(', ')}`);
+  }
+}
+
+/**
+ * Checks if two rules match according to the adjacency rules
+ * @param ruleA First rule to compare
+ * @param ruleB Second rule to compare
+ * @returns True if the rules match, false otherwise
+ */
+export function matchRules(ruleA: Rule, ruleB: Rule): boolean {
+  // Simple rules match if they have the same value
+  if (isSimpleRule(ruleA) && isSimpleRule(ruleB)) {
+    // return ruleA.value === ruleB.value;
+    return (ruleA as SimpleRule).value === (ruleB as SimpleRule).value;
+  }
+  
+  // Negated rules match if the contained rules don't match
+  if (isNegatedRule(ruleA)) {
+    return !matchRules((ruleA as NegatedRule).value, ruleB);
+  }
+  if (isNegatedRule(ruleB)) {
+    return !matchRules(ruleA, (ruleB as NegatedRule).value);
+  }
+  
+  // Directional rules match if origin from one matches destination from other and vice versa
+  if (isDirectionalRule(ruleA) && isDirectionalRule(ruleB)) {
+    // Cast to directional rules
+    const directionalA = ruleA as DirectionalRule;
+    const directionalB = ruleB as DirectionalRule;
+    return matchRules(directionalA.origin, directionalB.destination) && 
+           matchRules(directionalA.destination, directionalB.origin);
+  }
+  
+  // Compound rules match if they have the same number of elements and each matches in order
+  if (isCompoundRule(ruleA) && isCompoundRule(ruleB)) {
+    // Cast to compound rules
+    const compoundA = ruleA as CompoundRule;
+    const compoundB = ruleB as CompoundRule;
+    if (compoundA.values.length !== compoundB.values.length) {
+      return false;
+    }
+    
+    return compoundA.values.every((valueA, index) => 
+      matchRules(valueA, compoundB.values[index])
+    );
+  }
+  
+  // Choice rules match if any of their values match
+  if (isChoiceRule(ruleA)) {
+    return (ruleA as ChoiceRule).values.some(valueA => matchRules(valueA, ruleB));
+  }
+  if (isChoiceRule(ruleB)) {
+    return (ruleB as ChoiceRule).values.some(valueB => matchRules(ruleA, valueB));
+  }
+  
+  // If types don't match, they don't match
+  return false;
+}
+
+/**
+ * Utility function to create a simple rule
+ */
+export function createSimpleRule(value: string): SimpleRule {
+  return { type: RuleType.Simple, value };
+}
+
+/**
+ * Utility function to create a negated rule
+ */
+export function createNegatedRule(value: Rule): NegatedRule {
+  return { type: RuleType.Negated, value };
+}
+
+/**
+ * Utility function to create a directional rule
+ */
+export function createDirectionalRule(origin: Rule, destination: Rule): DirectionalRule {
+  return { type: RuleType.Directional, origin, destination };
+}
+
+/**
+ * Utility function to create a compound rule
+ */
+export function createCompoundRule(values: Rule[]): CompoundRule {
+  return { type: RuleType.Compound, values };
+}
+
+/**
+ * Utility function to create a choice rule
+ */
+export function createChoiceRule(values: Rule[]): ChoiceRule {
+  return { type: RuleType.Choice, values };
+} 

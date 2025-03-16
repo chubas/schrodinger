@@ -40,6 +40,8 @@
     "typescript": "^5.7.2"
   },
   "dependencies": {
+    "@types/parsimmon": "^1.10.9",
+    "parsimmon": "^1.18.1",
     "seedrandom": "^3.0.5"
   }
 }

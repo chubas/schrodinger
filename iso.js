@@ -2,13 +2,14 @@
 // Based on the original _iso.js implementation
 
 // Configuration
-let tileSize = 60;
+let tileSize = 30;
 // let tileX = 10;
 // let tileY = 15;
-let tileX = 10;
-let tileY = 15;
+let tileX = 30;
+let tileY = 20;
 let tileWidth, tileHeight;
 let wfc;
+let rng;
 let TILES = [];
 let colors = [
   "yellow",
@@ -69,10 +70,10 @@ function getCentroid(triangle) {
 
 // Debug function to draw triangle indices
 function debugTriangle(triangles, i) {
-  let centroid = getCentroid(triangles[i]);
-  fill(0);
-  textAlign(CENTER, CENTER);
-  text(i, ...centroid);
+  // let centroid = getCentroid(triangles[i]);
+  // fill(0);
+  // textAlign(CENTER, CENTER);
+  // text(i, ...centroid);
 }
 
 // Create Type A tile
@@ -187,6 +188,7 @@ function createTileB(types) {
 
       for (let i = 0; i < types.length; i++) {
         noStroke();
+        // stroke(colors[types[i]]);
         fill(colors[types[i]]);
         triangle(...triangles[i].flat());
         debugTriangle(triangles, i);
@@ -305,6 +307,7 @@ function setup() {
     }
 
     setSeed(seed) {
+      console.log(`%cSetting seed: ${seed}`, 'color: green; font-weight: bold;');
       randomSeed(seed);
     }
 
@@ -315,8 +318,8 @@ function setup() {
     }
   }
 
-  let rng = new P5Random();
-  // rng.setSeed(10);
+  rng = new P5Random();
+  rng.setSeed(floor(random(1000000)));
   // Create canvas
   createCanvas(tileX * tileWidth, tileY * tileHeight);
 
@@ -332,10 +335,10 @@ function setup() {
 
     wfc.on('collapse', (cell) => {
       // console.log(`Collapsed cell: ${cell.id}: ${cell.choices[0].id} (${cell.choices[0].adjacencies})`);
-      console.log({ cell });
-      for (let c of cell.cells) {
-        console.log(`${c.coords[0]}, ${c.coords[1]}: ${c.value}`, c.value)
-      }
+      // console.log({ cell });
+      // for (let c of cell.cells) {
+      //   console.log(`${c.coords[0]}, ${c.coords[1]}: ${c.value}`, c.value)
+      // }
     });
 
     // Listen for completion
@@ -389,18 +392,18 @@ function draw() {
       pop();
       // Also draw the adjacencies
       // Top Adjacency. Align text top center to be within the cell and touching the top edge
-      fill('red');
-      textAlign(CENTER, TOP);
-      text(cell.choices[0].adjacencies[0], x + tileWidth / 2, y);
-      // Bottom Adjacency. Align text bottom center to be within the cell and touching the bottom edge
-      textAlign(CENTER, BOTTOM);
-      text(cell.choices[0].adjacencies[2], x + tileWidth / 2, y + tileHeight);
-      // Left Adjacency. Align text left center to be within the cell and touching the left edge
-      textAlign(LEFT, CENTER);
-      text(cell.choices[0].adjacencies[3], x, y + tileHeight / 2);
-      // Right Adjacency. Align text right center to be within the cell and touching the right edge
-      textAlign(RIGHT, CENTER);
-      text(cell.choices[0].adjacencies[1], x + tileWidth, y + tileHeight / 2);
+      // fill('red');
+      // textAlign(CENTER, TOP);
+      // text(cell.choices[0].adjacencies[0], x + tileWidth / 2, y);
+      // // Bottom Adjacency. Align text bottom center to be within the cell and touching the bottom edge
+      // textAlign(CENTER, BOTTOM);
+      // text(cell.choices[0].adjacencies[2], x + tileWidth / 2, y + tileHeight);
+      // // Left Adjacency. Align text left center to be within the cell and touching the left edge
+      // textAlign(LEFT, CENTER);
+      // text(cell.choices[0].adjacencies[3], x, y + tileHeight / 2);
+      // // Right Adjacency. Align text right center to be within the cell and touching the right edge
+      // textAlign(RIGHT, CENTER);
+      // text(cell.choices[0].adjacencies[1], x + tileWidth, y + tileHeight / 2);
       
       
     } else {
@@ -512,9 +515,12 @@ function keyPressed() {
     // Restart WFC
     try {
       const grid = new Schrodinger.SquareGrid(tileX, tileY);
+      let seed = floor(random(1000000));
+      rng.setSeed(seed);
       wfc = new Schrodinger.WFC(TILES, grid, {
         maxRetries: 10,
-        logLevel: Schrodinger.LogLevel.INFO
+        logLevel: Schrodinger.LogLevel.INFO,
+        random: rng
       });
 
       done = false;
