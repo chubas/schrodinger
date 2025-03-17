@@ -8,6 +8,12 @@ class TriangleGrid implements Grid<[number, number]> {
   private cells: Cell[] = [];
   private size: number;
 
+  // Define adjacency maps for triangular grids
+  adjacencyMaps: Record<string, number[]> = {
+    'up': [2, 2, 0],     // [topLeft, topRight, bottom] -> [bottom, bottom, topLeft]
+    'down': [0, 0, 2]    // [bottomLeft, bottomRight, top] -> [topLeft, topRight, bottom]
+  };
+
   constructor(size: number) {
     this.size = size;
     // Initialize cells in a triangular pattern
@@ -51,15 +57,23 @@ class TriangleGrid implements Grid<[number, number]> {
 
   getNeighbors(coords: [number, number]): (Cell | null)[] {
     const [x, y] = coords;
-    // For a triangular grid, each cell has up to 3 neighbors:
-    // - One above (if not in top row)
-    // - One to the right (if not rightmost in row)
-    // - One to the left (if not leftmost in row)
-    return [
-      this.get([x, y - 1]), // top
-      this.get([x + 1, y]), // right
-      this.get([x - 1, y]), // left
-    ];
+    const isPointingUp = this.getAdjacencyType(coords) === 'up';
+    
+    if (isPointingUp) {
+      // Order: topLeft, topRight, bottom
+      return [
+        this.get([x-1, y-1]),
+        this.get([x+1, y-1]),
+        this.get([x, y+1])
+      ];
+    } else {
+      // Order: bottomLeft, bottomRight, top
+      return [
+        this.get([x-1, y+1]),
+        this.get([x+1, y+1]),
+        this.get([x, y-1])
+      ];
+    }
   }
 
   getCells(): Cell[] {
@@ -90,11 +104,17 @@ class TriangleGrid implements Grid<[number, number]> {
     };
   }
 
-  // In a triangular grid, adjacencies are:
-  // 0: top connects to bottom
-  // 1: right connects to left
-  // 2: left connects to right
-  adjacencyMap: number[] = [0, 2, 1];
+  // Return the adjacency type for the given coordinates
+  getAdjacencyType(coords: [number, number]): string {
+    const [x, y] = coords;
+    // Determine if triangle points up or down based on coordinates
+    return (x + y) % 2 === 0 ? 'up' : 'down';
+  }
+
+  // Get the adjacency map for the given coordinates
+  getAdjacencyMap(coords: [number, number]): number[] {
+    return this.adjacencyMaps[this.getAdjacencyType(coords)];
+  }
 }
 
 // Create simple rules for testing
@@ -148,12 +168,24 @@ describe("Custom Grid Implementation", () => {
     });
 
     it("should correctly identify neighbors in triangle grid", () => {
-      const grid = new TriangleGrid(3);
-
-      // Test middle cell in second row
-      const middleCell = grid.get([1, 2])!;
+      // Use a larger grid size to ensure we have enough room for neighbors
+      const grid = new TriangleGrid(5);
+      
+      // Check a cell that should have all its neighbors within bounds
+      // For a down-pointing triangle at [2, 3]
+      // Check whether this is a down-pointing triangle
+      const isDown = grid.getAdjacencyType([2, 3]) === 'down';
+      expect(isDown).toBe(true);
+      
+      const middleCell = grid.get([2, 3])!;
       const neighbors = grid.getNeighbors(middleCell.coords);
-
+      
+      // For a down-pointing triangle, the neighbors would be:
+      // bottomLeft [1, 4], bottomRight [3, 4], top [2, 2]
+      expect(neighbors[0]).toBe(grid.get([1, 4])); // bottomLeft
+      expect(neighbors[1]).toBe(grid.get([3, 4])); // bottomRight
+      expect(neighbors[2]).toBe(grid.get([2, 2])); // top
+      
       // Should have three neighbors
       expect(neighbors.filter(n => n !== null).length).toBe(3);
     });

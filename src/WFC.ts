@@ -4,6 +4,7 @@ import { Grid, Cell } from "./Grid.js";
 import { EventEmitter } from "events";
 import { matchAdjacencies } from "./Adjacencies.js";
 import { Rule, parseAdjacencyRule } from "./AdjacencyGrammar.js";
+import { PrecomputedAdjacencies } from "./PrecomputedAdjacencies.js";
 
 export enum LogLevel {
   NONE = 0,
@@ -107,6 +108,7 @@ export class WFC extends EventEmitter {
   private currentBacktrackState?: BacktrackState;
   private readonly MAX_ATTEMPTS_PER_LEVEL = 10;
   private readonly logLevel: LogLevel;
+  #precomputedAdjacencies?: PrecomputedAdjacencies;
 
   constructor(tileDefs: TileDef[], grid: Grid, options: WFCOptions = {}) {
     super();
@@ -595,12 +597,14 @@ export class WFC extends EventEmitter {
           // Get the adjacency rules for this direction
           const cellAdjacency = value.adjacencies[i];
           // Get the opposite direction's adjacency rule from the neighbor
+          const adjacencyMap = this.#grid.getAdjacencyMap(cellCollapse.coords);
+          const oppositeDirection = adjacencyMap[i];
           const neighborAdjacency =
-            neighborValue.adjacencies[this.#grid.adjacencyMap[i]];
+            neighborValue.adjacencies[oppositeDirection];
 
           this.log(
             LogLevel.DEBUG,
-            `Direction ${i} -> ${this.#grid.adjacencyMap[i]}`,
+            `Direction ${i} -> ${oppositeDirection}`,
           );
           this.log(
             LogLevel.DEBUG,
@@ -936,7 +940,9 @@ export class WFC extends EventEmitter {
         for (const option of newChoices) {
           for (const neighborOption of neighborChoices) {
             const d1 = option.adjacencies[i];
-            const d2 = neighborOption.adjacencies[this.#grid.adjacencyMap[i]];
+            const adjacencyMap = this.#grid.getAdjacencyMap(cell.coords);
+            const oppositeDirection = adjacencyMap[i];
+            const d2 = neighborOption.adjacencies[oppositeDirection];
             if (d1 === d2) {
               hasValidAdjacency = true;
               break;
@@ -967,6 +973,29 @@ export class WFC extends EventEmitter {
     return adjacencyValue;
   }
 
+  // Checks if two tiles can be adjacent in the given direction
+  canBeAdjacent(tile1: TileDef, coords: [number, number], direction: number, tile2: TileDef): boolean {
+    // If precomputed adjacencies are available, use them for faster lookup
+    if (this.#precomputedAdjacencies) {
+      const adjacencyType = this.#grid.getAdjacencyType(coords);
+      
+      if (this.#precomputedAdjacencies[tile1.name] && 
+          this.#precomputedAdjacencies[tile1.name][adjacencyType] &&
+          this.#precomputedAdjacencies[tile1.name][adjacencyType][direction]) {
+        return this.#precomputedAdjacencies[tile1.name][adjacencyType][direction].includes(tile2.name);
+      }
+    }
+    
+    // Otherwise fall back to rule matching
+    const adjacencyMap = this.#grid.getAdjacencyMap(coords);
+    const oppositeDirection = adjacencyMap[direction];
+    
+    return matchAdjacencies(
+      this.ensureRule(tile1.adjacencies[direction]),
+      this.ensureRule(tile2.adjacencies[oppositeDirection])
+    );
+  }
+
   // TODO: Implementation is quadratic, can be optimized by precalculating the total of possible adjacencies
   filterValidAdjacencies(
     cell: Cell,
@@ -974,7 +1003,8 @@ export class WFC extends EventEmitter {
     direction: number,
   ): TileDef[] {
     const valid = new Set<TileDef>();
-    const oppositeDirection = this.#grid.adjacencyMap[direction];
+    const adjacencyMap = this.#grid.getAdjacencyMap(cell.coords);
+    const oppositeDirection = adjacencyMap[direction];
 
     // If neighbor is collapsed, we must match its adjacency
     if (neighbor.collapsed) {
@@ -982,15 +1012,9 @@ export class WFC extends EventEmitter {
         LogLevel.DEBUG,
         ` 🤔 Comparing against collapsed neighbor ${neighbor.coords}`,
       );
-      const neighborAdjacency =
-        neighbor.choices[0].adjacencies[oppositeDirection];
+      const neighborTile = neighbor.choices[0];
       for (const option of cell.choices) {
-        if (
-          matchAdjacencies(
-            this.ensureRule(option.adjacencies[direction]), 
-            this.ensureRule(neighborAdjacency)
-          )
-        ) {
+        if (this.canBeAdjacent(option, cell.coords, direction, neighborTile)) {
           valid.add(option);
         }
       }
@@ -1001,17 +1025,9 @@ export class WFC extends EventEmitter {
         ` 🤔 Checking all combinations for cell ${cell.coords} against neighbor ${neighbor.coords}`,
       );
       for (const option of cell.choices) {
-        const optionAdjacency = option.adjacencies[direction];
-
         for (const neighborOption of neighbor.choices) {
-          const neighborAdjacency =
-            neighborOption.adjacencies[oppositeDirection];
-
           // Tiles can connect if their adjacencies match
-          if (matchAdjacencies(
-            this.ensureRule(optionAdjacency),
-            this.ensureRule(neighborAdjacency)
-          )) {
+          if (this.canBeAdjacent(option, cell.coords, direction, neighborOption)) {
             valid.add(option);
             break; // Once we find a valid neighbor, we can stop checking this option
           }
@@ -1080,5 +1096,13 @@ export class WFC extends EventEmitter {
       const prefix = LogLevel[level].padEnd(5);
       console.log(`[${prefix}]`, message, ...args);
     }
+  }
+
+  /**
+   * Sets precomputed adjacencies to be used for optimized adjacency checks
+   * @param precomputed The precomputed adjacencies object
+   */
+  setPrecomputedAdjacencies(precomputed: PrecomputedAdjacencies): void {
+    this.#precomputedAdjacencies = precomputed;
   }
 }
