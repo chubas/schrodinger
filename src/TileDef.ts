@@ -71,10 +71,10 @@ export class TileDefFactory {
   static defineTile(
     name: string,
     adjacencies: AdjacencyDefinition,
-    draw: (ctx: any, x: number, y: number, w: number, h: number) => void,
-    weight = 1,
-    rotation = 0,
-    reflection = false
+    draw: (ctx: any, x: number, y: number, w: number, h: number) => void = () => {},
+    weight: number = 1,
+    rotation: number = 0,
+    reflection: boolean = false
   ): TileDef {
     return {
       name,

@@ -8,6 +8,7 @@ export { SquareGrid } from "./Grid.js";
 export { WFC, LogLevel } from "./WFC.js";
 export { TileDef, TileDefFactory } from "./TileDef.js";
 export { RandomLib, DefaultRandom } from "./RandomLib.js";
+export { AdjacencyPrecomputer } from "./PrecomputedAdjacencies.js";
 // TilesetImporter is removed for browser builds as it depends on Node.js fs module
 
 // Export adjacency-related functionality

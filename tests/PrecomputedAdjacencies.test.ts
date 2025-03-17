@@ -10,22 +10,16 @@ describe('PrecomputedAdjacencies', () => {
     const tileA = TileDefFactory.defineTile(
       'A',
       ['A', 'A', 'A', 'A'], // Can connect to itself in all directions
-      () => {},
-      1
     );
     
     const tileB = TileDefFactory.defineTile(
       'B',
       ['B', 'B', 'B', 'B'], // Can connect to itself in all directions
-      () => {},
-      1
     );
     
     const tileC = TileDefFactory.defineTile(
       'C',
       ['A', 'B', 'C', 'A'], // Mixed connections
-      () => {},
-      1
     );
     
     return [tileA, tileB, tileC];

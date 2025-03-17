@@ -8,6 +8,7 @@ export { SquareGrid } from './Grid.js';
 export { TileDef, TileDefFactory } from './TileDef.js';
 export { RandomLib, DefaultRandom } from './RandomLib.js';
 export { TilesetImporter } from './TilesetImporter.js';
+export { AdjacencyPrecomputer } from './PrecomputedAdjacencies.js';
 
 // Adjacency components
 export { matchAdjacencies, matchRules } from './Adjacencies.js';
