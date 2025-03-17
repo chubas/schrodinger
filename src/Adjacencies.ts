@@ -82,13 +82,31 @@ export function matchRules(ruleA: Rule, ruleB: Rule): boolean {
  * Matches two adjacency rules to see if they are compatible
  * Using the new grammar-based approach
  * 
+ * @param a First adjacency rule as a Rule object
+ * @param b Second adjacency rule as a Rule object
+ * @returns Boolean indicating if the adjacencies match
+ */
+export function matchAdjacencies(a: Rule, b: Rule): boolean {
+  try {
+    // Use grammar-based rule matching directly with Rule objects
+    return matchRules(a, b);
+  } catch (e) {
+    console.error(`Error matching adjacencies: ${e}`);
+    return false;
+  }
+}
+
+/**
+ * Matches two adjacency rules expressed as strings
+ * This is a helper function that parses the strings and then uses matchAdjacencies
+ * 
  * @param a First adjacency rule as a string
  * @param b Second adjacency rule as a string
  * @returns Boolean indicating if the adjacencies match
  */
-export function matchAdjacencies(a: string, b: string): boolean {
+export function matchAdjacencyStrings(a: string, b: string): boolean {
   try {
-    // Parse adjacency rules using the grammar
+    // Parse the strings into Rule objects
     const ruleA = parseAdjacencyRule(a);
     if (ruleA instanceof Error) {
       console.error(`Error parsing adjacency rule "${a}": ${ruleA.message}`);
@@ -101,10 +119,10 @@ export function matchAdjacencies(a: string, b: string): boolean {
       return false;
     }
     
-    // Use grammar-based rule matching
-    return matchRules(ruleA, ruleB);
+    // Use the Rule object matching function
+    return matchAdjacencies(ruleA, ruleB);
   } catch (e) {
-    console.error(`Error matching adjacencies "${a}" and "${b}": ${e}`);
+    console.error(`Error matching adjacency strings: ${e}`);
     return false;
   }
 }

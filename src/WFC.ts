@@ -1,8 +1,9 @@
 import { RandomLib, DefaultRandom } from "./RandomLib.js";
-import { TileDef } from "./TileDef.js";
+import { TileDef, TileDefFactory } from "./TileDef.js";
 import { Grid, Cell, GridSnapshot, SquareGrid } from "./Grid.js";
 import { EventEmitter } from "events";
 import { matchAdjacencies } from "./Adjacencies.js";
+import { Rule, parseAdjacencyRule } from "./AdjacencyGrammar.js";
 
 export enum LogLevel {
   NONE = 0,
@@ -110,7 +111,13 @@ export class WFC extends EventEmitter {
   constructor(tileDefs: TileDef[], grid: Grid, options: WFCOptions = {}) {
     super();
     this.validateTileDefs(tileDefs);
-    this.tileDefs = tileDefs;
+    
+    // Ensure all adjacency rules are parsed during initialization
+    this.tileDefs = tileDefs.map(tileDef => {
+      // Use TileDefFactory to ensure all adjacency rules are Rule objects
+      return TileDefFactory.ensureParsedRules(tileDef);
+    });
+    
     this.#grid = grid;
     this.initializeGrid();
     const random = options.random ?? new DefaultRandom();
@@ -605,8 +612,8 @@ export class WFC extends EventEmitter {
           );
 
           if (!matchAdjacencies(
-            typeof cellAdjacency === 'string' ? cellAdjacency : cellAdjacency.toString(),
-            typeof neighborAdjacency === 'string' ? neighborAdjacency : neighborAdjacency.toString()
+            this.ensureRule(cellAdjacency),
+            this.ensureRule(neighborAdjacency)
           )) {
             this.log(
               LogLevel.DEBUG,
@@ -948,6 +955,18 @@ export class WFC extends EventEmitter {
     return invalidChanges;
   }
 
+  // Helper method to ensure an adjacency value is a Rule object
+  private ensureRule(adjacencyValue: string | Rule): Rule {
+    if (typeof adjacencyValue === 'string') {
+      const result = parseAdjacencyRule(adjacencyValue);
+      if (result instanceof Error) {
+        throw new Error(`Failed to parse adjacency rule: ${result.message}`);
+      }
+      return result;
+    }
+    return adjacencyValue;
+  }
+
   // TODO: Implementation is quadratic, can be optimized by precalculating the total of possible adjacencies
   filterValidAdjacencies(
     cell: Cell,
@@ -965,17 +984,14 @@ export class WFC extends EventEmitter {
       );
       const neighborAdjacency =
         neighbor.choices[0].adjacencies[oppositeDirection];
-      // this.log(LogLevel.DEBUG, `Neighbor adjacency at ${oppositeDirection}: ${JSON.stringify(neighborAdjacency)}`);
       for (const option of cell.choices) {
-        // this.log(LogLevel.DEBUG, `Checking cell option ${option.name} adjacency at ${direction}: ${JSON.stringify(option.adjacencies[direction])}`);
         if (
           matchAdjacencies(
-            typeof option.adjacencies[direction] === 'string' ? option.adjacencies[direction] : option.adjacencies[direction].toString(),
-            typeof neighborAdjacency === 'string' ? neighborAdjacency : neighborAdjacency.toString()
+            this.ensureRule(option.adjacencies[direction]), 
+            this.ensureRule(neighborAdjacency)
           )
         ) {
           valid.add(option);
-          // this.log(LogLevel.DEBUG, `Added ${option.name} as valid option`);
         }
       }
     } else {
@@ -986,20 +1002,17 @@ export class WFC extends EventEmitter {
       );
       for (const option of cell.choices) {
         const optionAdjacency = option.adjacencies[direction];
-        // this.log(LogLevel.DEBUG, `Cell option ${option.name} adjacency at ${direction}: ${JSON.stringify(optionAdjacency)}`);
 
         for (const neighborOption of neighbor.choices) {
           const neighborAdjacency =
             neighborOption.adjacencies[oppositeDirection];
-          // this.log(LogLevel.DEBUG, `Neighbor option ${neighborOption.name} adjacency at ${oppositeDirection}: ${JSON.stringify(neighborAdjacency)}`);
 
           // Tiles can connect if their adjacencies match
           if (matchAdjacencies(
-            typeof optionAdjacency === 'string' ? optionAdjacency : optionAdjacency.toString(),
-            typeof neighborAdjacency === 'string' ? neighborAdjacency : neighborAdjacency.toString()
+            this.ensureRule(optionAdjacency),
+            this.ensureRule(neighborAdjacency)
           )) {
             valid.add(option);
-            // this.log(LogLevel.DEBUG, `Added ${option.name} as valid option`);
             break; // Once we find a valid neighbor, we can stop checking this option
           }
         }

@@ -1,6 +1,7 @@
 import { Grid, Cell } from "../src/Grid";
 import { TileDef } from "../src/TileDef";
 import { WFC } from "../src/WFC";
+import { RuleType, SimpleRule } from "../src/AdjacencyGrammar";
 
 // Define a triangular grid where each cell has 3 neighbors
 class TriangleGrid implements Grid<[number, number]> {
@@ -96,22 +97,40 @@ class TriangleGrid implements Grid<[number, number]> {
   adjacencyMap: number[] = [0, 2, 1];
 }
 
+// Create simple rules for testing
+const createSimpleRule = (value: string): SimpleRule => ({
+  type: RuleType.Simple,
+  value
+});
+
 describe("Custom Grid Implementation", () => {
   // Mock tiles for triangular grid (3 adjacencies instead of 4)
   const triangleTiles: TileDef[] = [
     {
       name: "A",
-      adjacencies: ["1", "2", "3"],
+      adjacencies: [
+        createSimpleRule("1"),
+        createSimpleRule("2"),
+        createSimpleRule("3")
+      ],
       draw: () => {},
     },
     {
       name: "B",
-      adjacencies: ["2", "3", "1"],
+      adjacencies: [
+        createSimpleRule("2"),
+        createSimpleRule("3"),
+        createSimpleRule("1")
+      ],
       draw: () => {},
     },
     {
       name: "C",
-      adjacencies: ["3", "1", "2"],
+      adjacencies: [
+        createSimpleRule("3"),
+        createSimpleRule("1"),
+        createSimpleRule("2")
+      ],
       draw: () => {},
     },
   ];

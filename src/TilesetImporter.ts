@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { TileDef, TileDefFactory } from './TileDef.js';
+import { TileDef, TileDefFactory, AdjacencyDefinition } from './TileDef.js';
 
 /**
  * Interface for tileset definition files
@@ -8,7 +8,7 @@ import { TileDef, TileDefFactory } from './TileDef.js';
 export interface TilesetDefinition {
   tiles: {
     name: string;
-    adjacencies: string[];
+    adjacencies: AdjacencyDefinition;
     weight?: number;
     rotation?: number;
     reflection?: boolean;
@@ -37,6 +37,10 @@ export class TilesetImporter {
       const tilesetDefinition = JSON.parse(tilesetStr) as TilesetDefinition;
       
       return tilesetDefinition.tiles.map(tileDef => {
+        if (!tileDef.name) {
+          throw new Error('Tile definition must have a name');
+        }
+        
         return TileDefFactory.defineTile(
           tileDef.name,
           tileDef.adjacencies,

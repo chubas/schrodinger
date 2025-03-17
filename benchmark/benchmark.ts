@@ -18,6 +18,7 @@ import { WFC, LogLevel } from '../src/WFC.js';
 import { SquareGrid } from '../src/Grid.js';
 import { TileDefFactory } from '../src/TileDef.js';
 import { TileDef } from '../src/TileDef.js';
+import { RuleType, SimpleRule } from '../src/AdjacencyGrammar.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -114,16 +115,16 @@ function loadTilesFromFile(filePath: string): TileDef[] {
     const fileContent = fs.readFileSync(resolvedPath, 'utf8');
     const tileData = JSON.parse(fileContent);
 
-    // Convert the loaded data to TileDef objects using TileDefFactory
+    // Convert the loaded data to TileDef objects
     return tileData.map((tile: any) => {
-      return TileDefFactory.defineTile(
-        tile.name,
-        tile.adjacencies,
-        () => {}, // Empty draw function
-        tile.weight || 1,
-        tile.rotation || 0,
-        tile.reflection === true || tile.reflection === 1 ? true : false
-      );
+      return {
+        name: tile.name,
+        adjacencies: tile.adjacencies,
+        weight: tile.weight || 1,
+        rotation: tile.rotation || 0,
+        reflection: tile.reflection || 0,
+        draw: () => {} // Empty draw function
+      };
     });
   } catch (error) {
     console.error(`Error loading tiles from file: ${error}`);
@@ -185,12 +186,12 @@ async function runBenchmark(): Promise<boolean> {
 
         // Add adjacency rules for each side (top, right, bottom, left)
         for (let side = 0; side < 4; side++) {
-          // All tiles can connect to all other tiles
-          const connections = [];
-          for (let j = 0; j < numTileTypes; j++) {
-            connections.push(`Tile${j}`);
-          }
-          adjacencies.push(connections.join(","));
+          // Create rule objects directly instead of trying to parse comma-separated strings
+          const rule: SimpleRule = {
+            type: RuleType.Simple,
+            value: Array.from({ length: numTileTypes }, (_, j) => `Tile${j}`).join(",")
+          };
+          adjacencies.push(rule);
         }
 
         // Create the tile definition

@@ -1,31 +1,63 @@
 import { WFC, LogLevel } from "../src/WFC";
 import { SquareGrid } from "../src/Grid";
 import { pickTiles, DeterministicRNG } from "./util";
+import { RuleType, SimpleRule } from "../src/AdjacencyGrammar";
+
+// Create simple rules for testing
+const createSimpleRule = (value: string): SimpleRule => ({
+  type: RuleType.Simple,
+  value
+});
 
 const backtrackTiles = [
   {
     name: "A",
-    adjacencies: ["1", "1", "1", "1"],
+    adjacencies: [
+      createSimpleRule("1"),
+      createSimpleRule("1"),
+      createSimpleRule("1"),
+      createSimpleRule("1")
+    ],
     draw: () => { },
   },
   {
     name: "B",
-    adjacencies: ["2", "2", "2", "2"],
+    adjacencies: [
+      createSimpleRule("2"),
+      createSimpleRule("2"),
+      createSimpleRule("2"),
+      createSimpleRule("2")
+    ],
     draw: () => { },
   },
   {
     name: "C",
-    adjacencies: ["1", "2", "1", "2"],
+    adjacencies: [
+      createSimpleRule("1"),
+      createSimpleRule("2"),
+      createSimpleRule("1"),
+      createSimpleRule("2")
+    ],
     draw: () => { },
   },
   {
     name: "DeadEnd",
-    adjacencies: ["1", "2", "1", "3"],
+    adjacencies: [
+      createSimpleRule("1"),
+      createSimpleRule("2"),
+      createSimpleRule("1"),
+      createSimpleRule("3")
+    ],
     draw: () => { },
   },
   {
     name: "NoMatch",
-    adjacencies: ["X", "X", "Y", "Y"],
+    adjacencies: [
+      createSimpleRule("X"),
+      createSimpleRule("X"),
+      createSimpleRule("Y"),
+      createSimpleRule("Y")
+    ],
     draw: () => { },
   }
 ];

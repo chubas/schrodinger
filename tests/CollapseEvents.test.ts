@@ -4,39 +4,62 @@ import { TileDef } from "../src/TileDef";
 import { CellCollapse } from "../src/WFC";
 import { LogLevel } from "../src/WFC";
 import { DeterministicRNG } from "./util";
-// Simple tiles that can connect to anything
-const simpleTiles: TileDef[] = [
+import { RuleType, SimpleRule } from "../src/AdjacencyGrammar";
+
+// Create simple rules for testing
+const createSimpleRule = (value: string): SimpleRule => ({
+  type: RuleType.Simple,
+  value
+});
+
+const eventsTestTiles = [
   {
     name: "A",
-    adjacencies: ["1", "1", "1", "1"],
-    draw: () => {},
+    adjacencies: [
+      createSimpleRule("1"),
+      createSimpleRule("1"),
+      createSimpleRule("1"),
+      createSimpleRule("1")
+    ],
+    draw: () => { },
   },
   {
     name: "B",
-    adjacencies: ["1", "1", "1", "1"],
-    draw: () => {},
-  },
-];
-
-// Chess tiles that can only connect to their opposite
-const chessTiles: TileDef[] = [
-  {
-    name: "White",
-    adjacencies: ["[W>B]", "[W>B]", "[W>B]", "[W>B]"],
-    draw: () => {},
+    adjacencies: [
+      createSimpleRule("1"),
+      createSimpleRule("1"),
+      createSimpleRule("1"),
+      createSimpleRule("1")
+    ],
+    draw: () => { },
   },
   {
-    name: "Black",
-    adjacencies: ["[B>W]", "[B>W]", "[B>W]", "[B>W]"],
-    draw: () => {},
+    name: "W",
+    adjacencies: [
+      createSimpleRule("[W>B]"),
+      createSimpleRule("[W>B]"),
+      createSimpleRule("[W>B]"),
+      createSimpleRule("[W>B]")
+    ],
+    draw: () => { },
   },
+  {
+    name: "C",
+    adjacencies: [
+      createSimpleRule("[B>W]"),
+      createSimpleRule("[B>W]"),
+      createSimpleRule("[B>W]"),
+      createSimpleRule("[B>W]")
+    ],
+    draw: () => { },
+  }
 ];
 
 describe("WFC Collapse Events", () => {
   describe("Simple Grid Collapses", () => {
     it("should emit collapse events for 1x1 grid without seed", async () => {
       const grid = new SquareGrid(1, 1);
-      const wfc = new WFC(simpleTiles, grid, { random: new DeterministicRNG([0]) });
+      const wfc = new WFC(eventsTestTiles, grid, { random: new DeterministicRNG([0]) });
 
       let collapseCount = 0;
       await new Promise<void>((resolve) => {
@@ -58,7 +81,7 @@ describe("WFC Collapse Events", () => {
 
     it("should emit collapse events for 1x1 grid with seed", async () => {
       const grid = new SquareGrid(1, 1);
-      const wfc = new WFC(simpleTiles, grid);
+      const wfc = new WFC(eventsTestTiles, grid);
 
       let collapseCount = 0;
       await new Promise<void>((resolve) => {
@@ -74,13 +97,13 @@ describe("WFC Collapse Events", () => {
           resolve();
         });
 
-        wfc.start([{ coords: [0, 0], value: simpleTiles[0] }]);
+        wfc.start([{ coords: [0, 0], value: eventsTestTiles[0] }]);
       });
     });
 
     it("should emit collapse events for 2x2 grid with 2-cell seed", async () => {
       const grid = new SquareGrid(2, 2);
-      const wfc = new WFC(simpleTiles, grid, { random: new DeterministicRNG([0]) });
+      const wfc = new WFC(eventsTestTiles, grid, { random: new DeterministicRNG([0]) });
 
       let collapseCount = 0;
       const collapsedCells = new Set<string>();
@@ -111,8 +134,8 @@ describe("WFC Collapse Events", () => {
         });
 
         wfc.start([
-          { coords: [0, 0], value: simpleTiles[0] },
-          { coords: [0, 1], value: simpleTiles[0] }
+          { coords: [0, 0], value: eventsTestTiles[0] },
+          { coords: [0, 1], value: eventsTestTiles[0] }
         ]);
       });
     });
@@ -121,7 +144,7 @@ describe("WFC Collapse Events", () => {
   describe("Chess Pattern Collapses", () => {
     it("should emit collapse events for 2x2 grid without seed", async () => {
       const grid = new SquareGrid(2, 2);
-      const wfc = new WFC(chessTiles, grid, { random: new DeterministicRNG([0]) });
+      const wfc = new WFC(eventsTestTiles, grid, { random: new DeterministicRNG([0]) });
 
       let collapseCount = 0;
       const collapsedCells = new Set<string>();
@@ -198,7 +221,7 @@ describe("WFC Collapse Events", () => {
 
     it("should emit collapse events for 2x2 grid with 1-cell seed", async () => {
       const grid = new SquareGrid(2, 2);
-      const wfc = new WFC(chessTiles, grid);
+      const wfc = new WFC(eventsTestTiles, grid);
 
       let collapseCount = 0;
       const collapsedCells = new Set<string>();
@@ -274,13 +297,13 @@ describe("WFC Collapse Events", () => {
           resolve();
         });
 
-        wfc.start([{ coords: [0, 0], value: chessTiles[0] }]);
+        wfc.start([{ coords: [0, 0], value: eventsTestTiles[0] }]);
       });
     });
 
     it("should emit collapse events for 2x2 grid with 2-cell seed", async () => {
       const grid = new SquareGrid(2, 2);
-      const wfc = new WFC(chessTiles, grid);
+      const wfc = new WFC(eventsTestTiles, grid);
 
       let collapseCount = 0;
       const collapsedCells = new Set<string>();
@@ -357,8 +380,8 @@ describe("WFC Collapse Events", () => {
         });
 
         wfc.start([
-          { coords: [0, 0], value: chessTiles[0] },
-          { coords: [0, 1], value: chessTiles[1] }
+          { coords: [0, 0], value: eventsTestTiles[0] },
+          { coords: [0, 1], value: eventsTestTiles[1] }
         ]);
       });
     });

@@ -2,22 +2,44 @@ import { WFC, StepResult } from "../src/WFC";
 import { SquareGrid } from "../src/Grid";
 import { TileDef } from "../src/TileDef";
 import { pickTiles, DeterministicRNG } from "./util";
+import { Rule, RuleType, SimpleRule } from "../src/AdjacencyGrammar";
+
+// Create simple rules for testing
+const createSimpleRule = (value: string): SimpleRule => ({
+  type: RuleType.Simple,
+  value
+});
 
 // Mock tiles for testing
 const mockTiles: TileDef[] = [
   {
     name: "A",
-    adjacencies: ["1", "1", "1", "1"], // All sides connect with "1"
+    adjacencies: [
+      createSimpleRule("1"),
+      createSimpleRule("1"),
+      createSimpleRule("1"),
+      createSimpleRule("1")
+    ], // All sides connect with "1"
     draw: () => {},
   },
   {
     name: "B",
-    adjacencies: ["1", "1", "1", "1"], // All sides connect with "1"
+    adjacencies: [
+      createSimpleRule("1"),
+      createSimpleRule("1"),
+      createSimpleRule("1"),
+      createSimpleRule("1")
+    ], // All sides connect with "1"
     draw: () => {},
   },
   {
     name: "C",
-    adjacencies: ["1", "1", "1", "1"], // All sides connect with "1"
+    adjacencies: [
+      createSimpleRule("1"),
+      createSimpleRule("1"),
+      createSimpleRule("1"),
+      createSimpleRule("1")
+    ], // All sides connect with "1"
     draw: () => {},
   },
 ];
