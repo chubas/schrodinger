@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { TileDef, TileDefFactory } from './TileDef';
+import { TileDef, TileDefFactory } from './TileDef.js';
 
 /**
  * Interface for tileset definition files

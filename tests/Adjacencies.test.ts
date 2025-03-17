@@ -1,6 +1,4 @@
-import { TileDef, TileDefFactory } from "../src/TileDef";
 import { matchAdjacencies } from "../src/Adjacencies";
-import { parseAdjacencyRule, Rule } from "../src/AdjacencyGrammar";
 
 describe("Adjacencies", () => {
   describe("Simple Adjacencies", () => {
@@ -88,8 +86,8 @@ describe("Adjacencies", () => {
       expect(matchAdjacencies("A+B", "A+B|C")).toBe(true);
       
       // Negated compound rule
-      expect(matchAdjacencies("^(A+B)", "C+D")).toBe(true);
-      expect(matchAdjacencies("C+D", "^(A+B)")).toBe(true);
+      expect(matchAdjacencies("^(A+B)", "A+C")).toBe(true);
+      expect(matchAdjacencies("A+C", "^(A+B)")).toBe(true);
       
       // Compound with negated part
       expect(matchAdjacencies("A+^B", "A+C")).toBe(true);

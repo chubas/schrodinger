@@ -10,10 +10,9 @@ export { RandomLib, DefaultRandom } from './RandomLib.js';
 export { TilesetImporter } from './TilesetImporter.js';
 
 // Adjacency components
-export { matchAdjacencies } from './Adjacencies.js';
+export { matchAdjacencies, matchRules } from './Adjacencies.js';
 export { 
   parseAdjacencyRule, 
-  matchRules, 
   RuleType, 
   Rule, 
   SimpleRule, 

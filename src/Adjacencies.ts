@@ -1,4 +1,4 @@
-import { Rule, parseAdjacencyRule, RuleType, SimpleRule, NegatedRule, DirectionalRule, CompoundRule, ChoiceRule } from "./AdjacencyGrammar";
+import { Rule, parseAdjacencyRule, RuleType, SimpleRule, NegatedRule, DirectionalRule, CompoundRule, ChoiceRule } from "./AdjacencyGrammar.js";
 
 /**
  * Type guard functions for each rule type

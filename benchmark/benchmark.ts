@@ -114,16 +114,16 @@ function loadTilesFromFile(filePath: string): TileDef[] {
     const fileContent = fs.readFileSync(resolvedPath, 'utf8');
     const tileData = JSON.parse(fileContent);
 
-    // Convert the loaded data to TileDef objects
+    // Convert the loaded data to TileDef objects using TileDefFactory
     return tileData.map((tile: any) => {
-      return {
-        name: tile.name,
-        adjacencies: tile.adjacencies,
-        weight: tile.weight || 1,
-        rotation: tile.rotation || 0,
-        reflection: tile.reflection || 0,
-        draw: () => {} // Empty draw function
-      };
+      return TileDefFactory.defineTile(
+        tile.name,
+        tile.adjacencies,
+        () => {}, // Empty draw function
+        tile.weight || 1,
+        tile.rotation || 0,
+        tile.reflection === true || tile.reflection === 1 ? true : false
+      );
     });
   } catch (error) {
     console.error(`Error loading tiles from file: ${error}`);
@@ -194,12 +194,14 @@ async function runBenchmark(): Promise<boolean> {
         }
 
         // Create the tile definition
-        const tileDef = TileDefFactory.defineTile({
-          name: `Tile${t}`,
-          weight: 1,
+        const tileDef = TileDefFactory.defineTile(
+          `Tile${t}`,
           adjacencies,
-          draw: () => {} // Empty draw function
-        });
+          () => {}, // Empty draw function
+          1, // weight
+          0, // rotation
+          false // reflection
+        );
 
         tileDefs.push(tileDef);
       }

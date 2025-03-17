@@ -1,4 +1,4 @@
-import { Rule, parseAdjacencyRule } from "./AdjacencyGrammar";
+import { Rule, parseAdjacencyRule } from "./AdjacencyGrammar.js";
 
 export type TileDef = {
   /**

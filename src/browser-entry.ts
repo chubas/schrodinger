@@ -11,10 +11,9 @@ export { RandomLib, DefaultRandom } from "./RandomLib.js";
 // TilesetImporter is removed for browser builds as it depends on Node.js fs module
 
 // Export adjacency-related functionality
-export { matchAdjacencies } from "./Adjacencies.js";
+export { matchAdjacencies, matchRules } from "./Adjacencies.js";
 export { 
   parseAdjacencyRule, 
-  matchRules, 
   RuleType, 
   Rule, 
   SimpleRule, 
