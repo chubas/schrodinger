@@ -1,4 +1,4 @@
-import * as P from 'parsimmon';
+import P from 'parsimmon';
 
 /**
  * Types representing the different kinds of adjacency rules

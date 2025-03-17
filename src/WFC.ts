@@ -1,6 +1,6 @@
 import { RandomLib, DefaultRandom } from "./RandomLib.js";
 import { TileDef, TileDefFactory } from "./TileDef.js";
-import { Grid, Cell, GridSnapshot, SquareGrid } from "./Grid.js";
+import { Grid, Cell } from "./Grid.js";
 import { EventEmitter } from "events";
 import { matchAdjacencies } from "./Adjacencies.js";
 import { Rule, parseAdjacencyRule } from "./AdjacencyGrammar.js";

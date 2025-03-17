@@ -94,19 +94,8 @@ export class TileDefFactory {
   static ensureParsedRules(tileDef: TileDef): TileDef {
     const parsedAdjacencies = tileDef.adjacencies.map((adj, i) => {
       if (typeof adj === 'string') {
-        try {
-          const result = parseAdjacencyRule(adj);
-          if (result instanceof Error) {
-            console.warn(`Failed to parse adjacency rule "${adj}" at index ${i}: ${result.message}`);
-            return null;
-          }
-          return result;
-        } catch (e) {
-          console.warn(`Failed to parse adjacency rule "${adj}" at index ${i}: ${e}`);
-          return null;
-        }
+        return parseAdjacencyRule(adj);
       } else {
-        // Already a Rule object
         return adj;
       }
     }).filter((adj): adj is Rule => adj !== null);
@@ -117,16 +106,4 @@ export class TileDefFactory {
     };
   }
 
-  /**
-   * Parses a single adjacency rule string into a Rule object
-   * @param rule - String representation of an adjacency rule
-   * @returns Parsed Rule object or Error if parsing fails
-   */
-  static parseAdjacencyRule(adjacency: string): Rule | Error {
-    if (!adjacency) {
-      return new Error("Empty adjacency rule");
-    }
-
-    return parseAdjacencyRule(adjacency);
-  }
 }

@@ -7,7 +7,7 @@ timestamp=$(date +%Y%m%d%H%M%S)
 npm run benchmark -- \
   --width 60 \
   --height 60 \
-  --tiles-file ../benchmark/tiles/complex-tiles.json \
+  --tiles-file ./benchmark/tiles/complex-tiles.json \
   --repeat 10 \
   --output ./benchmark/complex-benchmark-results-${timestamp}.json
 

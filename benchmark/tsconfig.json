@@ -4,7 +4,8 @@
     "module": "ESNext",
     "moduleResolution": "node",
     "allowSyntheticDefaultImports": true,
-    "outDir": "../dist-benchmark"
+    "outDir": "../dist-benchmark",
+    "esModuleInterop": false
   },
   "include": ["./**/*.ts", "../src/**/*.ts"]
 } 

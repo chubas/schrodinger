@@ -19,6 +19,7 @@ import { SquareGrid } from '../src/Grid.js';
 import { TileDefFactory } from '../src/TileDef.js';
 import { TileDef } from '../src/TileDef.js';
 import { RuleType, SimpleRule } from '../src/AdjacencyGrammar.js';
+import { TilesetImporter } from '../src/TilesetImporter.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -100,39 +101,6 @@ console.log(`Output File: ${outputFile}`);
 console.log('');
 
 /**
- * Load tiles from a JSON file
- * @param filePath Path to the JSON file containing tile definitions
- * @returns Array of TileDef objects
- */
-function loadTilesFromFile(filePath: string): TileDef[] {
-  try {
-    // Resolve the file path
-    const resolvedPath = path.isAbsolute(filePath)
-      ? filePath
-      : path.resolve(__dirname, '..', filePath);
-
-    // Read and parse the JSON file
-    const fileContent = fs.readFileSync(resolvedPath, 'utf8');
-    const tileData = JSON.parse(fileContent);
-
-    // Convert the loaded data to TileDef objects
-    return tileData.map((tile: any) => {
-      return {
-        name: tile.name,
-        adjacencies: tile.adjacencies,
-        weight: tile.weight || 1,
-        rotation: tile.rotation || 0,
-        reflection: tile.reflection || 0,
-        draw: () => {} // Empty draw function
-      };
-    });
-  } catch (error) {
-    console.error(`Error loading tiles from file: ${error}`);
-    process.exit(1);
-  }
-}
-
-/**
  * Format memory usage in a human-readable format
  * @param bytes The number of bytes
  * @returns Formatted string (e.g., "1.23 MB")
@@ -176,7 +144,7 @@ async function runBenchmark(): Promise<boolean> {
 
     if (tilesFile) {
       // Load tiles from file
-      tileDefs = loadTilesFromFile(tilesFile);
+      tileDefs = TilesetImporter.loadFromFile(tilesFile);
       console.log(`Loaded ${tileDefs.length} tiles from ${tilesFile}`);
     } else {
       // Create generated tiles
