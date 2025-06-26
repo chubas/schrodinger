@@ -2,7 +2,7 @@
 // Based on the original _iso.js implementation
 
 // Configuration
-let tileSize = 30;
+let tileSize = 20;
 // let tileX = 10;
 // let tileY = 15;
 let tileX = 30;
@@ -345,7 +345,8 @@ function setup() {
 
   rng = new P5Random();
   // This seed fails: 126985 <- use it for debugging later on
-  rng.setSeed(floor(random(1000000)));
+  // rng.setSeed(floor(random(1000000)));
+  rng.setSeed(126985);
   // Create canvas
   createCanvas(tileX * tileWidth, tileY * tileHeight);
 
@@ -354,7 +355,7 @@ function setup() {
     const grid = new Schrodinger.SquareGrid(tileX, tileY);
     wfc = new Schrodinger.WFC(TILES, grid, {
       maxRetries: 10,
-      // logLevel: Schrodinger.LogLevel.DEBUG,
+      logLevel: Schrodinger.LogLevel.DEBUG, // Enable DEBUG logging to see exhaustion checks
       random: rng
     });
 
@@ -566,7 +567,7 @@ function keyPressed() {
       rng.setSeed(seed);
       wfc = new Schrodinger.WFC(TILES, grid, {
         maxRetries: 10,
-        logLevel: Schrodinger.LogLevel.INFO,
+        logLevel: Schrodinger.LogLevel.DEBUG, // Enable DEBUG logging to see exhaustion checks
         random: rng
       });
 
@@ -624,7 +625,7 @@ function keyPressed() {
         const grid = new Schrodinger.SquareGrid(tileX, tileY);
         wfc = new Schrodinger.WFC(TILES, grid, {
           maxRetries: 10,
-          logLevel: Schrodinger.LogLevel.INFO
+          logLevel: Schrodinger.LogLevel.DEBUG
         });
 
         // Apply precomputed adjacencies if available

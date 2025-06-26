@@ -219,7 +219,7 @@ export class WFC extends EventEmitter {
           if (!result.success) {
             // If the initial seed is invalid, restore and throw
             this.restoreSnapshot(snapshotId);
-            this.snapshots.delete(snapshotId);
+            this.deleteSnapshot(snapshotId, "initial-seed-invalid");
             throw new Error("Initial seed creates an impossible state");
           }
 
@@ -229,10 +229,10 @@ export class WFC extends EventEmitter {
           yield { type: "collapse", group: initialGroup, affectedCells: result.affectedCells };
 
           // Clean up the snapshot since we succeeded
-          this.snapshots.delete(snapshotId);
+          this.deleteSnapshot(snapshotId, "initial-seed-success");
         } catch (error) {
           // Clean up snapshot on any error
-          this.snapshots.delete(snapshotId);
+          this.deleteSnapshot(snapshotId, "initial-seed-error");
           throw error;
         }
 
@@ -308,6 +308,9 @@ export class WFC extends EventEmitter {
         parentState: this.currentBacktrackState,
       };
 
+      // Log backtrack state creation
+      console.log(`%cBACKTRACK CREATE: snapshot ${snapshotId}, parent: ${this.currentBacktrackState?.snapshotId || 'none'}`, 'color: #9C27B0; font-weight: bold;');
+      
       this.currentBacktrackState = backtrackState;
 
       try {
@@ -366,7 +369,7 @@ export class WFC extends EventEmitter {
         backtrackState.wasSuccessful = true;
 
         // Clean up snapshot since we succeeded
-        this.snapshots.delete(snapshotId);
+        this.deleteSnapshot(snapshotId, "collapse-queue-success");
 
         // If queue is empty but we still have uncollapsed cells, add lowest entropy
         if (this.collapseQueue.length === 0 && !this.completed) {
@@ -388,7 +391,7 @@ export class WFC extends EventEmitter {
         }
       } catch (error) {
         // Clean up snapshot on any error
-        this.snapshots.delete(snapshotId);
+        this.deleteSnapshot(snapshotId, "collapse-queue-error");
         // Fatal error - restore to last known good state
         if (this.currentBacktrackState) {
           this.restoreSnapshot(this.currentBacktrackState.snapshotId);
@@ -433,49 +436,107 @@ export class WFC extends EventEmitter {
   private *handleMultiLevelBacktrackGenerator(emitEvents: boolean = true): Generator<StepResult, boolean, unknown> {
     let currentState = this.currentBacktrackState;
     let backtrackDepth = 0;
+    
+    // First pass: Find a viable state without deleting anything
+    let viableState: BacktrackState | undefined = undefined;
+    let tempState = currentState;
+    let tempDepth = 0;
 
-    while (currentState) {
-      backtrackDepth++;
-      if (emitEvents) this.emit("backtrack", currentState.group); // Emit backtrack event for each level
-      yield { type: "backtrack", group: currentState.group };
-
+    while (tempState && tempDepth < 50) { // Prevent infinite loops
+      tempDepth++;
+      
       // Try to find a previous state that still has untried possibilities
-      if (!this.hasExhaustedAllChoices(currentState)) {
+      if (!this.hasExhaustedAllChoices(tempState)) {
         this.log(
           LogLevel.INFO,
-          `Found valid backtrack state at depth ${backtrackDepth}`,
+          `Found viable backtrack state at depth ${tempDepth}`,
         );
-
-        // Restore to this state and try again
-        this.restoreSnapshot(currentState.snapshotId);
-
-        // Clear propagation queue before trying new values
-        this.propagationQueue.clear();
-
-        // Attempt to collapse with new choices
-        const stepResults = this.attemptCollapseWithRetriesGenerator(currentState, emitEvents);
-        let stepResult: IteratorResult<StepResult, boolean>;
-        
-        do {
-          stepResult = stepResults.next();
-          if (!stepResult.done && stepResult.value) {
-            yield stepResult.value;
-          }
-        } while (!stepResult.done);
-        
-        const success = stepResult.value;
-        
-        if (success) {
-          return true;
-        }
+        viableState = tempState;
+        break;
       }
-
-      // Clean up snapshot before moving to parent
-      this.snapshots.delete(currentState.snapshotId);
-      currentState = currentState.parentState;
+      
+      tempState = tempState.parentState;
     }
 
-    return false;
+    // If no viable state found, we've exhausted all possibilities
+    if (!viableState) {
+      this.log(LogLevel.INFO, "No viable backtrack state found - all possibilities exhausted");
+      
+      // Clean up all snapshots in the chain since we're giving up
+      let cleanupState = currentState;
+      while (cleanupState) {
+        this.deleteSnapshot(cleanupState.snapshotId, "multi-level-backtrack-cleanup");
+        cleanupState = cleanupState.parentState;
+      }
+      
+      return false;
+    }
+
+    // Second pass: Clean up snapshots that are deeper than the viable state
+    let cleanupState = currentState;
+    while (cleanupState && cleanupState !== viableState) {
+      backtrackDepth++;
+      if (emitEvents) this.emit("backtrack", cleanupState.group);
+      yield { type: "backtrack", group: cleanupState.group };
+      
+      const nextState = cleanupState.parentState;
+      this.deleteSnapshot(cleanupState.snapshotId, "multi-level-backtrack-deeper");
+      cleanupState = nextState;
+    }
+
+    // Third pass: Restore to the viable state and try again
+    this.log(
+      LogLevel.INFO,
+      `Restoring to viable backtrack state at depth ${backtrackDepth + 1}`,
+    );
+
+    // Restore to this state and try again
+    this.restoreSnapshot(viableState.snapshotId);
+
+    // Clear propagation queue before trying new values
+    this.propagationQueue.clear();
+
+    // Update current backtrack state to the viable one
+    this.currentBacktrackState = viableState;
+
+    // Attempt to collapse with new choices
+    const stepResults = this.attemptCollapseWithRetriesGenerator(viableState, emitEvents);
+    let stepResult: IteratorResult<StepResult, boolean>;
+    
+    do {
+      stepResult = stepResults.next();
+      if (!stepResult.done && stepResult.value) {
+        yield stepResult.value;
+      }
+    } while (!stepResult.done);
+    
+    const success = stepResult.value;
+    
+    if (success) {
+      return true;
+    } else {
+      // Even the viable state failed, continue the multi-level backtrack from its parent
+      this.log(LogLevel.INFO, "Viable state also failed, continuing backtrack from its parent");
+      this.deleteSnapshot(viableState.snapshotId, "multi-level-backtrack-failed");
+      this.currentBacktrackState = viableState.parentState;
+      
+      // Recursively try multi-level backtrack from the parent
+      if (this.currentBacktrackState) {
+        const recursiveResults = this.handleMultiLevelBacktrackGenerator(emitEvents);
+        let recursiveResult: IteratorResult<StepResult, boolean>;
+        
+        do {
+          recursiveResult = recursiveResults.next();
+          if (!recursiveResult.done && recursiveResult.value) {
+            yield recursiveResult.value;
+          }
+        } while (!recursiveResult.done);
+        
+        return recursiveResult.value;
+      }
+      
+      return false;
+    }
   }
 
   private processCollapseQueue(): void {
@@ -832,8 +893,13 @@ export class WFC extends EventEmitter {
     }
 
     this.snapshots.set(id, snapshot);
-    this.log(LogLevel.DEBUG, "📷 Taking snapshot", id, "Current grid state:");
-    this.debugGridState();
+    
+    // Log snapshot creation with color
+    this.logSnapshot("SNAPSHOT CREATE", id, `total: ${this.snapshots.size}, changed cells: ${snapshot.changedCellIds.size}`);
+    if (this.logLevel >= LogLevel.DEBUG) {
+      console.log(`%cAvailable snapshots: [${Array.from(this.snapshots.keys()).join(', ')}]`, 'color: #4CAF50; font-size: 11px;');
+      this.debugGridState();
+    }
 
     // Emit snapshot event
     this.emit("snapshot", id);
@@ -842,15 +908,34 @@ export class WFC extends EventEmitter {
   }
 
   private restoreSnapshot(id: number): void {
-    const snapshot = this.snapshots.get(id);
-    if (!snapshot) {
-      throw new Error(`Snapshot ${id} not found`);
-      // console.error(`Snapshot ${id} not found`);
-      // return;
+    // Log restore attempt
+    this.logSnapshotRestore("SNAPSHOT RESTORE", id, false);
+    if (this.logLevel >= LogLevel.DEBUG) {
+      console.log(`%cAvailable snapshots: [${Array.from(this.snapshots.keys()).join(', ')}]`, 'color: #2196F3; font-size: 11px;');
     }
 
-    this.log(LogLevel.DEBUG, "Restoring snapshot", id, "Previous grid state:");
-    this.debugGridState();
+    const snapshot = this.snapshots.get(id);
+    if (!snapshot) {
+      // Enhanced error logging with call stack
+      console.log(`%cSNAPSHOT ERROR: ${id} not found!`, 'color: #f44336; font-weight: bold; font-size: 14px;');
+      console.log(`%cCurrent snapshots: [${Array.from(this.snapshots.keys()).join(', ')}]`, 'color: #f44336;');
+      console.log(`%cSnapshot counter: ${this.snapshotCounter}`, 'color: #f44336;');
+      
+      // Log current backtrack state chain
+      this.logBacktrackStateChain();
+      
+      // Capture and log the call stack
+      const stack = new Error().stack;
+      console.log(`%cCall stack:`, 'color: #f44336; font-weight: bold;');
+      console.log(stack);
+      
+      throw new Error(`Snapshot ${id} not found`);
+    }
+
+    if (this.logLevel >= LogLevel.DEBUG) {
+      this.log(LogLevel.DEBUG, "Previous grid state before restore:");
+      this.debugGridState();
+    }
 
     // Restore only the cells that have changed since this snapshot was taken
     for (const cellId of snapshot.changedCellIds) {
@@ -873,11 +958,49 @@ export class WFC extends EventEmitter {
       this.lastCellState.set(cellId, delta);
     }
 
-    this.log(LogLevel.DEBUG, "After restore:");
-    this.debugGridState();
+    // Log successful restore
+    this.logSnapshotRestore("SNAPSHOT RESTORE", id, true, `restored ${snapshot.changedCellIds.size} cells`);
+
+    if (this.logLevel >= LogLevel.DEBUG) {
+      this.log(LogLevel.DEBUG, "After restore:");
+      this.debugGridState();
+    }
 
     // Emit snapshot event for the restored snapshot
     this.emit("snapshot", id);
+  }
+
+  // Add helper method to track snapshot deletions
+  private deleteSnapshot(id: number, context: string): void {
+    const existed = this.snapshots.has(id);
+    this.logSnapshotDelete("SNAPSHOT DELETE", id, context, existed);
+    
+    if (existed) {
+      this.snapshots.delete(id);
+      if (this.logLevel >= LogLevel.DEBUG) {
+        console.log(`%cRemaining snapshots: [${Array.from(this.snapshots.keys()).join(', ')}]`, 'color: #f44336; font-size: 11px;');
+      }
+    } else {
+      console.log(`%cWARNING: Attempted to delete non-existent snapshot ${id}`, 'color: #FF9800; font-weight: bold;');
+    }
+  }
+
+  // Helper method to log backtrack state chain
+  private logBacktrackStateChain(): void {
+    let current = this.currentBacktrackState;
+    let depth = 0;
+    
+    console.log(`%cCurrent BacktrackState chain:`, 'color: #9C27B0; font-weight: bold;');
+    while (current && depth < 10) { // Prevent infinite loops
+      const parentSnapshot = current.parentState?.snapshotId || 'none';
+      console.log(`%c  Depth ${depth}: snapshot ${current.snapshotId}, attempts ${current.attempts}, parent: ${parentSnapshot}`, 'color: #9C27B0;');
+      current = current.parentState;
+      depth++;
+    }
+    
+    if (depth >= 10) {
+      console.log(`%c  ... (chain truncated at depth 10)`, 'color: #9C27B0; font-style: italic;');
+    }
   }
 
   private debugGridState() {
@@ -1071,18 +1194,49 @@ export class WFC extends EventEmitter {
 
       // Get choices from the snapshot state
       const snapshot = this.snapshots.get(state.snapshotId);
-      if (!snapshot) return true; // If no snapshot, consider exhausted
+      if (!snapshot) {
+        this.log(LogLevel.DEBUG, `No snapshot ${state.snapshotId} found for exhaustion check`);
+        return true; // If no snapshot, consider exhausted
+      }
 
       const cellId = `${x},${y}`;
       const snapshotCell = snapshot.deltas.get(cellId);
-      if (!snapshotCell) return true;
+      if (!snapshotCell) {
+        this.log(LogLevel.DEBUG, `No snapshot cell data for ${cellId}`);
+        return true;
+      }
 
-      // If there are any untried choices from the snapshot state, we haven't exhausted all possibilities
-      if (snapshotCell.choices.some((choice: TileDef) => !tried.has(choice))) {
+      // Check both the snapshot choices AND the current grid state
+      // We need choices that are:
+      // 1. In the original snapshot
+      // 2. Still available in the current grid state (after propagation)
+      // 3. Not yet tried
+      const availableChoices = snapshotCell.choices.filter((choice: TileDef) => {
+        // Must not have been tried yet
+        if (tried.has(choice)) return false;
+        
+        // Must still be available in current grid state
+        // (propagation might have eliminated some choices)
+        return cell.choices.some(currentChoice => currentChoice.name === choice.name);
+      });
+
+      this.log(
+        LogLevel.DEBUG,
+        `Exhaustion check for ${coordKey}: snapshot choices: ${snapshotCell.choices.length}, ` +
+        `current choices: ${cell.choices.length}, tried: ${tried.size}, available: ${availableChoices.length}`
+      );
+
+      // If there are any available untried choices, we haven't exhausted all possibilities
+      if (availableChoices.length > 0) {
+        this.log(
+          LogLevel.DEBUG,
+          `Cell ${coordKey} still has ${availableChoices.length} untried choices: ${availableChoices.map(c => c.name).join(', ')}`
+        );
         return false;
       }
     }
 
+    this.log(LogLevel.DEBUG, "All choices exhausted for this backtrack state");
     return true;
   }
 
@@ -1095,6 +1249,30 @@ export class WFC extends EventEmitter {
     if (level <= this.logLevel) {
       const prefix = LogLevel[level].padEnd(5);
       console.log(`[${prefix}]`, message, ...args);
+    }
+  }
+
+  // Helper method for colored snapshot logging
+  private logSnapshot(message: string, id: number, context?: string, ...args: unknown[]): void {
+    if (this.logLevel >= LogLevel.INFO) {
+      const contextStr = context ? ` (${context})` : '';
+      console.log(`%c${message} ${id}${contextStr}`, 'color: #4CAF50; font-weight: bold;', ...args);
+    }
+  }
+
+  private logSnapshotDelete(message: string, id: number, context?: string, existed?: boolean, ...args: unknown[]): void {
+    if (this.logLevel >= LogLevel.INFO) {
+      const contextStr = context ? ` (${context})` : '';
+      const existedStr = existed !== undefined ? ` - existed: ${existed}` : '';
+      console.log(`%c${message} ${id}${contextStr}${existedStr}`, 'color: #f44336; font-weight: bold;', ...args);
+    }
+  }
+
+  private logSnapshotRestore(message: string, id: number, success: boolean, ...args: unknown[]): void {
+    if (this.logLevel >= LogLevel.INFO) {
+      const color = success ? '#2196F3' : '#FF9800';
+      const status = success ? 'SUCCESS' : 'ATTEMPTING';
+      console.log(`%c${message} ${id} - ${status}`, `color: ${color}; font-weight: bold;`, ...args);
     }
   }
 
