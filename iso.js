@@ -375,12 +375,19 @@ function setup() {
       console.log("Using predefined precomputed adjacencies");
     }
 
-    wfc.on('collapse', (cell) => {
+    wfc.on('collapse', ({cells}) => {
       // console.log(`Collapsed cell: ${cell.id}: ${cell.choices[0].id} (${cell.choices[0].adjacencies})`);
       // console.log({ cell });
       // for (let c of cell.cells) {
       //   console.log(`${c.coords[0]}, ${c.coords[1]}: ${c.value}`, c.value)
       // }
+      // console.clear()
+      // console.warn('Collapsed cell:', cell)
+      if (cells && cells[0].coords[0] === 6 && cells[0].coords[1] === 18) {
+        console.clear()
+        console.warn('Clearing console before error')
+      }
+      console.log("Collapsed cells:", cells);
     });
 
     // Listen for completion

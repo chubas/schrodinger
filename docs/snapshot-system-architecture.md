@@ -4,6 +4,191 @@
 
 The WFC implementation uses a sophisticated snapshot-based backtracking mechanism to handle contradictions and invalid states during the wave function collapse process. This system allows the algorithm to revert to previous valid states when it encounters impossible configurations.
 
+## Current Implementation (Post-Fix)
+
+### Hierarchical Architecture
+
+The new implementation uses three main components:
+
+1. **SnapshotManager**: Handles delta-only snapshots with reference counting
+2. **BacktrackTree**: Manages hierarchical backtracking structure  
+3. **ExhaustionTracker**: Tracks tried combinations for precise exhaustion detection
+
+### Key Data Structures
+
+#### `DeltaSnapshot`
+```typescript
+interface DeltaSnapshot {
+  id: number;
+  parentSnapshotId?: number;
+  deltas: CellDelta[];           // Only changed cells
+  referenceCount: number;        // Reference counting for cleanup
+  timestamp: number;             // For debugging and cleanup
+}
+```
+
+#### `BacktrackNode`
+```typescript
+interface BacktrackNode {
+  id: number;
+  snapshotId: number;
+  parent?: BacktrackNode;
+  children: BacktrackNode[];
+  targetCells: CellCoords[];
+  triedChoices: Map<string, Set<TileId>>;
+  depth: number;
+  isExhausted: boolean;
+}
+```
+
+### Reference Counting Fix
+
+**The Problem**: The original implementation had a critical bug where snapshots were deleted immediately after creation due to a `finally` block that always executed:
+
+```typescript
+// BUGGY CODE (Fixed)
+try {
+  // ... collapse logic
+  return result;
+} finally {
+  this.snapshots.removeReference(snapshotId); // Always executed!
+}
+```
+
+**The Fix**: Reference counting now correctly manages snapshot lifecycle:
+
+```typescript
+// FIXED CODE
+if (result.success) {
+  // Keep snapshot alive - we might need to backtrack to it
+  return result;
+} else {
+  // Remove reference since we're failing
+  this.snapshots.removeReference(snapshotId);
+  return result;
+}
+```
+
+**Key Insight**: Successful collapses must keep their snapshots alive because they might be backtrack targets later. Only failed collapses should immediately clean up their snapshots.
+
+## Memory Implications Analysis
+
+### Current Memory Usage Pattern
+
+With the fix, snapshots now accumulate during successful algorithm progression:
+
+```
+Algorithm Progress:
+Node 1 (success) → Snapshot 1 kept alive (refCount = 1)
+├─ Node 2 (success) → Snapshot 2 kept alive (refCount = 1)  
+│  ├─ Node 3 (success) → Snapshot 3 kept alive (refCount = 1)
+│  │  └─ Node 4 (fail) → Backtrack to Node 3
+│  └─ Node 5 (success) → Snapshot 5 kept alive (refCount = 1)
+└─ Continue...
+```
+
+### Memory Growth Characteristics
+
+#### 1. **Linear Growth During Success**
+- Each successful collapse creates a new snapshot
+- Snapshots remain in memory as potential backtrack points
+- Memory usage grows linearly with algorithm depth
+
+#### 2. **Delta-Only Storage Efficiency**
+- Each snapshot only stores changed cells, not full grid state
+- Typical delta size: 10-50 cells out of 600 total (83-92% memory savings)
+- Storage per delta: ~100 bytes (coordinates + tile names)
+
+#### 3. **Cleanup Triggers**
+Snapshots are cleaned up when:
+- **Backtracking occurs**: Deeper snapshots become unreachable
+- **Algorithm completes**: All snapshots can be freed
+- **Reference count reaches zero**: Automatic cleanup
+
+### Memory Usage Estimation
+
+For a 30x20 grid (600 cells) with typical WFC progression:
+
+```
+Grid Size: 30x20 = 600 cells
+Average Delta Size: ~30 cells (5% of grid)
+Bytes per Delta: ~100 bytes
+Algorithm Depth: ~300-400 successful collapses
+
+Peak Memory Usage:
+- Snapshots: 400 × 30 × 100 bytes = ~1.2 MB
+- Grid State: 600 × 200 bytes = ~120 KB  
+- Total: ~1.3 MB (very reasonable)
+```
+
+### Potential Memory Issues
+
+#### 1. **Deep Backtracking Scenarios**
+If the algorithm frequently backtracks many levels deep, older snapshots might accumulate:
+
+```
+Scenario: Algorithm gets stuck in deep exploration
+├─ 100 successful collapses (100 snapshots)
+├─ Backtrack 50 levels
+├─ 100 more successful collapses (150 snapshots total)
+└─ Memory usage: 150 × 3KB = ~450KB (still reasonable)
+```
+
+#### 2. **Large Grid Scenarios**
+For very large grids, delta sizes might increase proportionally:
+
+```
+Large Grid: 100x100 = 10,000 cells
+Average Delta: ~500 cells (5% of grid)
+Peak Usage: 1000 × 500 × 100 bytes = ~50 MB (getting significant)
+```
+
+#### 3. **Complex Constraint Scenarios**
+Highly constrained tilesets might cause more frequent backtracking, keeping more snapshots alive longer.
+
+### Memory Management Strategies
+
+#### Current Mitigations
+1. **Reference Counting**: Automatic cleanup when snapshots become unreachable
+2. **Delta-Only Storage**: 90%+ memory savings vs full snapshots
+3. **Hierarchical Cleanup**: Backtracking automatically prunes deeper snapshots
+
+#### Future Optimizations (If Needed)
+1. **Depth-Limited Cleanup**: Automatically clean snapshots older than N levels
+2. **Memory Pressure Cleanup**: Clean oldest snapshots when memory usage exceeds threshold
+3. **Snapshot Compression**: Compress delta data for long-term storage
+4. **Lazy Snapshot Creation**: Only create snapshots when backtracking is likely
+
+### Recommendations
+
+#### For Current Use Cases (Small-Medium Grids)
+- **No immediate action needed**: Memory usage is very reasonable
+- **Monitor in benchmarks**: Track peak memory usage during testing
+- **Consider cleanup frequency**: The current `cleanupFrequency` settings are conservative
+
+#### For Future Large-Scale Use
+- **Implement memory monitoring**: Add memory usage tracking to WFC class
+- **Add configurable limits**: Allow users to set maximum snapshot count/memory
+- **Consider hybrid approaches**: Keep recent snapshots in memory, archive older ones
+
+### Configuration Impact
+
+The current backtrack strategies have different memory profiles:
+
+```typescript
+BACKTRACK_STRATEGIES = {
+  conservative: { maxLevels: 1, cleanupFrequency: 100 },  // Low memory
+  aggressive: { maxLevels: 5, cleanupFrequency: 50 },     // Medium memory  
+  deep: { maxLevels: 10, cleanupFrequency: 25 }           // Higher memory
+};
+```
+
+**Recommendation**: Start with `conservative` for memory-constrained environments, use `aggressive` for balanced performance, and `deep` only when necessary for complex problems.
+
+## Conclusion
+
+The reference counting fix resolved the critical "snapshot not found" bug while introducing a predictable memory usage pattern. For typical use cases, memory consumption remains very reasonable (~1-2 MB), and the delta-only approach provides excellent efficiency. The system is well-positioned for future optimization if needed for larger-scale applications.
+
 ## Core Components
 
 ### 1. Snapshot Data Structures
