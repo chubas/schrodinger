@@ -2,11 +2,11 @@
 // Based on the original _iso.js implementation
 
 // Configuration
-let tileSize = 20;
-// let tileX = 10;
-// let tileY = 15;
-let tileX = 30;
-let tileY = 20;
+let tileSize = 60;
+let tileX = 10;
+let tileY = 15;
+// let tileX = 30;
+// let tileY = 20;
 let tileWidth, tileHeight;
 let wfc;
 let rng;
@@ -367,7 +367,7 @@ function setup() {
       if (computed) {
         // Set the precomputed adjacencies for this session
         wfc.setPrecomputedAdjacencies(computed);
-        console.log("Using computed adjacencies for this session");
+        console.log("Using computed adjacencies");
       }
     } else {
       // Use the predefined precomputed adjacencies
@@ -387,7 +387,7 @@ function setup() {
         console.clear()
         console.warn('Clearing console before error')
       }
-      console.log("Collapsed cells:", cells);
+      console.warn("Collapsed cells:", cells);
     });
 
     // Listen for completion
@@ -417,6 +417,22 @@ function setup() {
   }
 }
 
+let drawAdjacencies = (cell, x, y) => {
+  fill('red');
+  textAlign(CENTER, TOP);
+  let space = min(tileWidth, tileHeight) / 10;
+  text(cell.choices[0].adjacencies[0], x + tileWidth / 2, y + space);
+  // Bottom Adjacency. Align text bottom center to be within the cell and touching the bottom edge
+  textAlign(CENTER, BOTTOM);
+  text(cell.choices[0].adjacencies[2], x + tileWidth / 2, y + tileHeight - space);
+  // Left Adjacency. Align text left center to be within the cell and touching the left edge
+  textAlign(LEFT, CENTER);
+  text(cell.choices[0].adjacencies[3], x + space, y + tileHeight / 2);
+  // Right Adjacency. Align text right center to be within the cell and touching the right edge
+  textAlign(RIGHT, CENTER);
+  text(cell.choices[0].adjacencies[1], x + tileWidth - space, y + tileHeight / 2);
+}
+
 // p5.js draw function
 function draw() {
   if (preview) return;
@@ -440,20 +456,7 @@ function draw() {
       // console.log(`${coords[0]}, ${coords[1]} | Adjacencies: ${cell.choices[0].adjacencies} --- ${cell.choices[0].id}`);
       pop();
       // Also draw the adjacencies
-      // Top Adjacency. Align text top center to be within the cell and touching the top edge
-      // fill('red');
-      // textAlign(CENTER, TOP);
-      // text(cell.choices[0].adjacencies[0], x + tileWidth / 2, y);
-      // // Bottom Adjacency. Align text bottom center to be within the cell and touching the bottom edge
-      // textAlign(CENTER, BOTTOM);
-      // text(cell.choices[0].adjacencies[2], x + tileWidth / 2, y + tileHeight);
-      // // Left Adjacency. Align text left center to be within the cell and touching the left edge
-      // textAlign(LEFT, CENTER);
-      // text(cell.choices[0].adjacencies[3], x, y + tileHeight / 2);
-      // // Right Adjacency. Align text right center to be within the cell and touching the right edge
-      // textAlign(RIGHT, CENTER);
-      // text(cell.choices[0].adjacencies[1], x + tileWidth, y + tileHeight / 2);
-      
+      drawAdjacencies(cell, x, y);
       
     } else {
       // Draw uncollapsed cells
@@ -489,6 +492,15 @@ function draw() {
       done = true;
       wfcGenerator = null;
     }
+  }
+  // Draw grid
+  stroke(0);
+  strokeWeight(1);
+  for (let x = 0; x < tileX; x++) {
+    line(x * tileWidth, 0, x * tileWidth, tileY * tileHeight);
+  }
+  for (let y = 0; y < tileY; y++) {
+    line(0, y * tileHeight, tileX * tileWidth, y * tileHeight);
   }
 }
 
@@ -574,7 +586,7 @@ function keyPressed() {
       rng.setSeed(seed);
       wfc = new Schrodinger.WFC(TILES, grid, {
         maxRetries: 10,
-        logLevel: Schrodinger.LogLevel.DEBUG, // Enable DEBUG logging to see exhaustion checks
+        // logLevel: Schrodinger.LogLevel.DEBUG, // Enable DEBUG logging to see exhaustion checks
         random: rng
       });
 
@@ -632,7 +644,7 @@ function keyPressed() {
         const grid = new Schrodinger.SquareGrid(tileX, tileY);
         wfc = new Schrodinger.WFC(TILES, grid, {
           maxRetries: 10,
-          logLevel: Schrodinger.LogLevel.DEBUG
+          // logLevel: Schrodinger.LogLevel.DEBUG
         });
 
         // Apply precomputed adjacencies if available

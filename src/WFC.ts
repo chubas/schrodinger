@@ -153,8 +153,7 @@ class SnapshotManager {
   restoreSnapshot(id: number, grid: Grid, tileDefs: TileDef[]): boolean {
     const snapshot = this.snapshots.get(id);
     if (!snapshot) {
-      console.error(`❌ Snapshot ${id} not found in snapshots map`);
-      console.error(`Available snapshots: [${Array.from(this.snapshots.keys()).join(', ')}]`);
+      console.error(`Snapshot ${id} not found`);
       return false;
     }
 
@@ -164,13 +163,11 @@ class SnapshotManager {
       tileMap.set(tile.name, tile);
     }
 
-    console.log(`🔄 Restoring snapshot ${id} with ${snapshot.deltas.length} deltas`);
-
     // Restore each cell delta
     for (const delta of snapshot.deltas) {
       const cell = grid.get(delta.coords);
       if (!cell) {
-        console.warn(`⚠️ Cell at ${delta.coords} not found in grid during restoration`);
+        console.warn(`Cell at ${delta.coords} not found during restoration`);
         continue;
       }
 
@@ -188,25 +185,20 @@ class SnapshotManager {
       }
 
       if (missingTiles.length > 0) {
-        console.error(`❌ Failed to resolve tiles during restoration: ${missingTiles.join(', ')}`);
-        console.error(`Available tile names: [${Array.from(tileMap.keys()).join(', ')}]`);
-        console.error(`Trying to restore cell ${delta.coords} with choices: [${delta.previousChoices.join(', ')}]`);
+        console.error(`Failed to resolve tiles: ${missingTiles.join(', ')}`);
         return false;
       }
 
       if (resolvedTiles.length === 0) {
-        console.error(`❌ Cell ${delta.coords} would have no choices after restoration`);
+        console.error(`Cell ${delta.coords} would have no choices after restoration`);
         return false;
       }
 
       // Restore choices
       cell.choices = resolvedTiles;
       cell.collapsed = delta.previousCollapsed;
-      
-      console.log(`✅ Restored cell ${delta.coords}: ${resolvedTiles.length} choices, collapsed: ${delta.previousCollapsed}`);
     }
 
-    console.log(`✅ Successfully restored snapshot ${id}`);
     return true;
   }
 
@@ -466,11 +458,11 @@ export class WFC extends EventEmitter {
   }
 
   *execute(initialSeed?: CellCollapse[], emitEvents: boolean = true): Generator<StepResult, void, unknown> {
-    this.log(LogLevel.INFO, "🚀 Starting WFC execution with new hierarchical backtracking");
+    this.log(LogLevel.INFO, "Starting WFC execution");
     
     // Handle initial seed if provided
     if (initialSeed && initialSeed.length > 0) {
-      this.log(LogLevel.INFO, "🌱 Processing initial seed");
+      this.log(LogLevel.DEBUG, "Processing initial seed");
       const group: CollapseGroup = {
         cells: initialSeed,
         cause: "initial"
@@ -488,7 +480,7 @@ export class WFC extends EventEmitter {
         // Select cells to collapse based on entropy
         const targetCells = this.selectCellsToCollapse();
         if (targetCells.length === 0) {
-          this.log(LogLevel.INFO, "✅ WFC completed successfully");
+          this.log(LogLevel.INFO, "WFC completed successfully");
           if (emitEvents) this.emit("complete");
           yield { type: "complete" };
           return;
@@ -515,20 +507,18 @@ export class WFC extends EventEmitter {
         }
 
       } catch (error) {
-        this.log(LogLevel.ERROR, "❌ WFC execution failed:", error);
+        this.log(LogLevel.ERROR, "WFC execution failed:", error);
         if (emitEvents) this.emit("error", error);
         throw error;
       }
     }
 
-    this.log(LogLevel.INFO, "✅ WFC completed successfully");
+    this.log(LogLevel.INFO, "WFC completed successfully");
     if (emitEvents) this.emit("complete");
     yield { type: "complete" };
   }
 
   private *attemptCollapse(group: CollapseGroup, emitEvents: boolean = true): Generator<StepResult, CollapseResult, unknown> {
-    this.log(LogLevel.DEBUG, `🎯 Attempting to collapse ${group.cells.length} cells`);
-
     // Get cells that have changed since last snapshot
     const changedCells = this.getChangedCells();
     
@@ -539,13 +529,11 @@ export class WFC extends EventEmitter {
     // Create backtrack node
     const targetCells: CellCoords[] = group.cells.map(c => c.coords);
     const node = this.backtrackTree.createChild(targetCells, snapshotId);
-    
-    this.log(LogLevel.DEBUG, `📷 Created snapshot ${snapshotId} and node ${node.id} at depth ${node.depth}`);
 
     // Get untried choices for this node
     const availableChoices = this.getUntriedChoices(node);
     if (availableChoices.size === 0) {
-      this.log(LogLevel.DEBUG, `❌ No untried choices available for node ${node.id}`);
+      this.log(LogLevel.DEBUG, `No untried choices for node ${node.id}`);
       this.backtrackTree.markExhausted(node);
       // Remove reference since we're failing
       this.snapshots.removeReference(snapshotId);
@@ -563,13 +551,13 @@ export class WFC extends EventEmitter {
     const result = this.collapseWithChoices(group.cells, selectedChoices);
     
     if (result.success) {
-      this.log(LogLevel.DEBUG, `✅ Collapse successful for node ${node.id}`);
+      this.log(LogLevel.DEBUG, `Collapsed ${group.cells.length} cells at depth ${node.depth}`);
       if (emitEvents) this.emit("collapse", group);
       yield { type: "collapse", group, affectedCells: result.affectedCells };
       // Keep the snapshot alive since collapse succeeded - we might need to backtrack to it
       return result;
     } else {
-      this.log(LogLevel.DEBUG, `❌ Collapse failed for node ${node.id}`);
+      this.log(LogLevel.DEBUG, `Collapse failed for node ${node.id}`);
       // Remove reference since we're failing
       this.snapshots.removeReference(snapshotId);
       return result;
@@ -577,23 +565,20 @@ export class WFC extends EventEmitter {
   }
 
   private *handleBacktrack(emitEvents: boolean = true): Generator<StepResult, boolean, unknown> {
-    this.log(LogLevel.INFO, "🔄 Starting hierarchical backtrack");
+    this.log(LogLevel.INFO, "Starting backtrack");
 
     for (let depth = 1; depth <= this.strategy.maxLevels; depth++) {
-      this.log(LogLevel.DEBUG, `🔍 Searching for viable ancestor at depth ${depth}`);
-      
       const viableNode = this.backtrackTree.findViableAncestor(depth);
       if (!viableNode) {
-        this.log(LogLevel.DEBUG, `❌ No viable ancestor found at depth ${depth}`);
         continue;
       }
 
-      this.log(LogLevel.INFO, `🎯 Found viable ancestor at depth ${depth}, node ${viableNode.id}`);
+      this.log(LogLevel.INFO, `Backtracking to depth ${depth}, node ${viableNode.id}`);
       
       // Restore to this state
       const restored = this.snapshots.restoreSnapshot(viableNode.snapshotId, this.#grid, this.tileDefs);
       if (!restored) {
-        this.log(LogLevel.WARN, `⚠️ Failed to restore snapshot ${viableNode.snapshotId}`);
+        this.log(LogLevel.WARN, `Failed to restore snapshot ${viableNode.snapshotId}`);
         continue;
       }
 
@@ -607,16 +592,14 @@ export class WFC extends EventEmitter {
 
       // Check if this node still has untried possibilities
       if (!this.exhaustionTracker.isExhausted(viableNode.targetCells, this.#grid)) {
-        this.log(LogLevel.DEBUG, `✅ Node ${viableNode.id} still has untried possibilities`);
         return true;
       }
 
       // Mark as exhausted and continue to deeper levels
-      this.log(LogLevel.DEBUG, `❌ Node ${viableNode.id} is actually exhausted`);
       this.backtrackTree.markExhausted(viableNode);
     }
 
-    this.log(LogLevel.ERROR, "❌ All backtrack levels exhausted");
+    this.log(LogLevel.ERROR, "All backtrack levels exhausted");
     return false;
   }
 
@@ -728,7 +711,6 @@ export class WFC extends EventEmitter {
         if (!neighbor || !neighbor.collapsed) continue;
 
         if (!this.canBeAdjacent(tile, cellCollapse.coords, i, neighbor.choices[0])) {
-          this.log(LogLevel.DEBUG, `❌ Incompatible adjacency detected between ${tile.name} and ${neighbor.choices[0].name}`);
           return { success: false, affectedCells: [] };
         }
       }
@@ -746,7 +728,6 @@ export class WFC extends EventEmitter {
       const tile = tileMap.get(tileId);
       if (!tile) continue;
 
-      this.log(LogLevel.DEBUG, `🎯 Collapsing cell ${cell.coords} to ${tile.name}`);
       cell.collapsed = true;
       cell.choices = [tile];
       affectedCells.push(cell);
@@ -760,7 +741,6 @@ export class WFC extends EventEmitter {
 
     const propagationResult = this.processConstraintPropagation();
     if (!propagationResult) {
-      this.log(LogLevel.DEBUG, "❌ Constraint propagation failed");
       return { success: false, affectedCells };
     }
 
@@ -788,7 +768,7 @@ export class WFC extends EventEmitter {
 
       // Check for contradictions
       if (cell.choices.length === 0) {
-        this.log(LogLevel.DEBUG, `❌ Cell ${cell.coords} has no valid choices after propagation`);
+        this.log(LogLevel.DEBUG, `Cell ${cell.coords} has no valid choices after propagation`);
         return false;
       }
 
@@ -821,8 +801,8 @@ export class WFC extends EventEmitter {
     const cleaned = this.snapshots.cleanup(oldTime);
     const pruned = this.backtrackTree.cleanup(this.strategy.maxLevels * 2);
     
-    if (cleaned > 0 || pruned > 0) {
-      this.log(LogLevel.DEBUG, `🧹 Cleanup: removed ${cleaned} snapshots, ${pruned} tree nodes`);
+    if ((cleaned > 0 || pruned > 0) && this.logLevel >= LogLevel.DEBUG) {
+      this.log(LogLevel.DEBUG, `Cleanup: removed ${cleaned} snapshots, ${pruned} tree nodes`);
     }
   }
 
@@ -921,14 +901,9 @@ export class WFC extends EventEmitter {
   ): TileDef[] {
     const valid = new Set<TileDef>();
     const adjacencyMap = this.#grid.getAdjacencyMap(cell.coords);
-    const oppositeDirection = adjacencyMap[direction];
 
     // If neighbor is collapsed, we must match its adjacency
     if (neighbor.collapsed) {
-      this.log(
-        LogLevel.DEBUG,
-        ` 🤔 Comparing against collapsed neighbor ${neighbor.coords}`,
-      );
       const neighborTile = neighbor.choices[0];
       for (const option of cell.choices) {
         if (this.canBeAdjacent(option, cell.coords, direction, neighborTile)) {
@@ -937,10 +912,6 @@ export class WFC extends EventEmitter {
       }
     } else {
       // Otherwise, check all possible combinations
-      this.log(
-        LogLevel.DEBUG,
-        ` 🤔 Checking all combinations for cell ${cell.coords} against neighbor ${neighbor.coords}`,
-      );
       for (const option of cell.choices) {
         for (const neighborOption of neighbor.choices) {
           // Tiles can connect if their adjacencies match
@@ -952,12 +923,7 @@ export class WFC extends EventEmitter {
       }
     }
 
-    const result = Array.from(valid);
-    this.log(
-      LogLevel.DEBUG,
-      ` ➡️ Valid options for cell ${cell.coords}: ${result.map((r) => r.name).join(",")}`,
-    );
-    return result;
+    return Array.from(valid);
   }
 
   undoChange(delta: DeltaChange<[number, number]>): Cell[] {
