@@ -7,6 +7,28 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
 </head>
 <body>
+    <!-- Load our custom EventEmitter implementation -->
+    <script src="EventEmitter.js"></script>
+
+    <!-- Define global events module for compatibility -->
+    <script>
+        // Create a global events module for compatibility
+        window.events = { EventEmitter: window.EventEmitter };
+
+        // Define a global require function for compatibility
+        window.require = function(moduleName) {
+            if (moduleName === 'events') {
+                return window.events;
+            }
+            throw new Error(`Module ${moduleName} not found`);
+        };
+    </script>
+
+    <!-- Load Schrodinger WFC library -->
+    <script src="dist/index.global.js"></script>
+    <script src="cubic-hex-grid.js"></script>
+    
+    <!-- Load our custom cubic hex grid -->
     <script src="hex-grid-test.js"></script>
 </body>
 </html> 

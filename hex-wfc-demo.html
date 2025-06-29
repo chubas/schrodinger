@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cubic Hexagonal Grid WFC Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f0f0f0;
+        }
+        #info {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #controls {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+        #output {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h1>🔬 Cubic Hexagonal Grid WFC Demo</h1>
+        <p>This demonstrates using a <strong>custom grid</strong> with the Schrodinger WFC library.</p>
+        <p>The <code>CubicHexagonalGrid</code> is implemented as an external JavaScript class that follows the Grid interface.</p>
+        <p><strong>Features:</strong></p>
+        <ul>
+            <li>Uses cubic coordinates [x, y, z] where x + y + z = 0</li>
+            <li>Supports 6 hexagonal directions with proper adjacency mapping</li>
+            <li>Works seamlessly with the core WFC library</li>
+            <li>Demonstrates third-party grid extensibility</li>
+        </ul>
+    </div>
+
+    <div id="controls">
+        <button onclick="createGrid()">Create Hex Grid</button>
+        <button onclick="setupTiles()">Setup Simple Tiles</button>
+        <button onclick="initWFC()">Initialize WFC</button>
+        <button onclick="inspectGrid()">Inspect Grid</button>
+        <button onclick="clearOutput()">Clear Output</button>
+    </div>
+
+    <div id="output">Click "Create Hex Grid" to start...
+    </div>
+
+    <!-- Load our custom EventEmitter implementation -->
+    <script src="EventEmitter.js"></script>
+
+    <!-- Define global events module for compatibility -->
+    <script>
+        // Create a global events module for compatibility
+        window.events = { EventEmitter: window.EventEmitter };
+
+        // Define a global require function for compatibility
+        window.require = function(moduleName) {
+            if (moduleName === 'events') {
+                return window.events;
+            }
+            throw new Error(`Module ${moduleName} not found`);
+        };
+    </script>
+
+    <!-- Load Schrodinger WFC library -->
+    <script src="dist/index.global.js"></script>
+    
+    <!-- Load our custom cubic hex grid -->
+    <script src="cubic-hex-grid.js"></script>
+    
+    <script>
+        let grid = null;
+        let wfc = null;
+        let tiles = [];
+        
+        function log(message) {
+            const output = document.getElementById('output');
+            output.textContent += message + '\n';
+            output.scrollTop = output.scrollHeight;
+        }
+        
+        function clearOutput() {
+            document.getElementById('output').textContent = '';
+        }
+        
+        function createGrid() {
+            try {
+                // Create a hexagonal grid with radius 3
+                grid = new CubicHexagonalGrid(3);
+                log('✅ Created CubicHexagonalGrid with radius 3');
+                log(`   Grid has ${grid.getCells().length} cells`);
+                
+                // Show some example coordinates
+                log('\n📍 Sample coordinates:');
+                let count = 0;
+                for (const [cell, coords] of grid.iterate()) {
+                    if (count < 10) {
+                        log(`   [${coords[0]}, ${coords[1]}, ${coords[2]}] -> sum: ${coords[0] + coords[1] + coords[2]}`);
+                        count++;
+                    }
+                }
+                if (grid.getCells().length > 10) {
+                    log(`   ... and ${grid.getCells().length - 10} more cells`);
+                }
+                
+            } catch (error) {
+                log('❌ Error creating grid: ' + error.message);
+            }
+        }
+        
+        function setupTiles() {
+            if (!grid) {
+                log('❌ Create grid first!');
+                return;
+            }
+            
+            try {
+                // Create simple tiles with 6-sided adjacencies (like your A, B, C concept)
+                tiles = [
+                    // All tiles use 'X' adjacency for universal compatibility
+                    {name:'A-ALL', adjacencies: ['X', 'X', 'X', 'X', 'X', 'X']},
+                    {name:'B-ALL', adjacencies: ['X', 'X', 'X', 'X', 'X', 'X']},
+                    {name:'C-ALL', adjacencies: ['X', 'X', 'X', 'X', 'X', 'X']}
+                ];
+                
+                log('✅ Created 3 simple tiles:');
+                tiles.forEach(tile => {
+                    log(`   ${tile.name}: [${tile.adjacencies.join(', ')}]`);
+                });
+                
+            } catch (error) {
+                log('❌ Error creating tiles: ' + error.message);
+            }
+        }
+        
+        function initWFC() {
+            if (!grid || tiles.length === 0) {
+                log('❌ Create grid and tiles first!');
+                return;
+            }
+            
+            try {
+                // Initialize WFC with our custom hex grid
+                wfc = new Schrodinger.WFC(tiles, grid, {
+                    onCollapse: (coords, tile) => {
+                        log(`🎯 Collapsed [${coords[0]}, ${coords[1]}, ${coords[2]}] -> ${tile.name}`);
+                    },
+                    onContradiction: (coords) => {
+                        log(`💥 Contradiction at [${coords[0]}, ${coords[1]}, ${coords[2]}]`);
+                    }
+                });
+                
+                log('✅ WFC initialized with CubicHexagonalGrid!');
+                log('   Ready to run wave function collapse...');
+                
+            } catch (error) {
+                log('❌ Error initializing WFC: ' + error.message);
+            }
+        }
+        
+        function inspectGrid() {
+            if (!grid) {
+                log('❌ Create grid first!');
+                return;
+            }
+            
+            try {
+                log('\n🔍 Grid Inspection:');
+                log(`   Type: ${grid.constructor.name}`);
+                log(`   Radius: ${grid.radius}`);
+                log(`   Total cells: ${grid.getCells().length}`);
+                
+                // Test neighbor relationships
+                const centerCell = grid.get([0, 0, 0]);
+                if (centerCell) {
+                    const neighbors = grid.getNeighbors([0, 0, 0]);
+                    log(`\n   Center cell [0, 0, 0] has ${neighbors.filter(n => n !== null).length} neighbors:`);
+                    neighbors.forEach((neighbor, index) => {
+                        if (neighbor) {
+                            log(`     Direction ${index}: [${neighbor.coords.join(', ')}]`);
+                        } else {
+                            log(`     Direction ${index}: null`);
+                        }
+                    });
+                }
+                
+                // Test adjacency mapping
+                const adjType = grid.getAdjacencyType([0, 0, 0]);
+                const adjMap = grid.getAdjacencyMap([0, 0, 0]);
+                log(`\n   Adjacency type: "${adjType}"`);
+                log(`   Adjacency map: [${adjMap.join(', ')}]`);
+                
+            } catch (error) {
+                log('❌ Error inspecting grid: ' + error.message);
+            }
+        }
+        
+        // Initialize on page load
+        window.addEventListener('load', () => {
+            log('🚀 Cubic Hexagonal Grid WFC Demo loaded');
+            log('   - Schrodinger WFC library: ✅');
+            log('   - CubicHexagonalGrid extension: ✅');
+            log('\nReady to demonstrate third-party grid integration!');
+        });
+    </script>
+</body>
+</html> 
