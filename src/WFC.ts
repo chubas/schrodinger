@@ -449,6 +449,48 @@ export class WFC extends EventEmitter {
     return array[index];
   }
 
+  /**
+   * Picks a tile from an array using weighted random selection
+   * @param tiles Array of tiles to pick from
+   * @returns Selected tile based on weight distribution
+   */
+  pickWeighted(tiles: TileDef[]): TileDef {
+    if (tiles.length === 0) {
+      throw new Error("Cannot pick from empty array");
+    }
+
+    // If only one tile, return it directly
+    if (tiles.length === 1) {
+      return tiles[0];
+    }
+
+    // Calculate total weight
+    let totalWeight = 0;
+    for (const tile of tiles) {
+      totalWeight += tile.weight || 1; // Default weight of 1 if not specified
+    }
+
+    // Handle edge case where all weights are 0
+    if (totalWeight === 0) {
+      return this.pick(tiles); // Fall back to uniform selection
+    }
+
+    // Generate random number between 0 and totalWeight
+    const randomValue = this.rng.random() * totalWeight;
+
+    // Find the tile corresponding to this random value
+    let currentWeight = 0;
+    for (const tile of tiles) {
+      currentWeight += tile.weight || 1;
+      if (randomValue <= currentWeight) {
+        return tile;
+      }
+    }
+
+    // Fallback (should never reach here, but safety net)
+    return tiles[tiles.length - 1];
+  }
+
   get completed(): boolean {
     for (const [cell] of this.#grid.iterate()) {
       if (!cell.collapsed) {
@@ -675,7 +717,7 @@ export class WFC extends EventEmitter {
       const choices = availableChoices.get(coordKey);
       
       if (choices && choices.length > 0) {
-        const selectedTile = cellCollapse.value || this.pick(choices);
+        const selectedTile = cellCollapse.value || this.pickWeighted(choices);
         selected.set(coordKey, selectedTile.name);
       }
     }

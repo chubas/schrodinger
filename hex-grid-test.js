@@ -25,11 +25,9 @@ let colors = {
 
 let generateAdjacencies = (types) => {
     let adjacencies = [];
-    // Right adjacency: A with A or any with any
     adjacencies.push(types[0] === 'A' ? 'A' : 'a');
     adjacencies.push(types[1] === 'C' ? 'C' : 'c');
     adjacencies.push(types[2] === 'B' ? 'B' : 'b');
-    // Same for opposite sides
     adjacencies.push(types[3] === 'A' ? 'A' : 'a');
     adjacencies.push(types[4] === 'C' ? 'C' : 'c');
     adjacencies.push(types[5] === 'B' ? 'B' : 'b');
@@ -37,6 +35,25 @@ let generateAdjacencies = (types) => {
     return adjacencies;
 }
 
+function* allCombinations(array, positions) {
+    const n = array.length;
+    const indices = Array(positions).fill(0);
+  
+    while (true) {
+      yield indices.map(i => array[i]);
+  
+      // Increment like a base-n number
+      let i = positions - 1;
+      while (i >= 0) {
+        indices[i]++;
+        if (indices[i] < n) break;
+        indices[i] = 0;
+        i--;
+      }
+  
+      if (i < 0) return; // We're done
+    }
+  }
 
 function setup() {
     // createCanvas(1200, 1200);
@@ -47,21 +64,37 @@ function setup() {
     hexStrokeColor = color(100, 150, 200);
     textColor = color(50, 50, 50);
 
-    let tileTypes = [
-        'AAAAAA',
-        'BBBBBB',
-        'CCCCCC',
-        'ACCCAA',
-        'CAAACC',
-        'AAABBB',
-        'BBBAAA',
-        'BBCCCB',
-        'CCBBBC',
-    ]
+    // Iterate for all the possible combinations of A, B, C, then filter out the invalid ones
+    let tileTypes = [];
+    let matchingPairs = {
+        'A': [[1, 2], [4, 5]],
+        'B': [[0, 1], [3, 4]],
+        'C': [[2, 3], [5, 0]],
+    }
+    for (let combination of allCombinations(['A', 'B', 'C'], 6)) {
+        // It's a valid tile as long as the matching pairs are the same if either is the letter
+        let isValid = true;
+        for (let i = 0; i < 6; i++) {   
+            let letter = combination[i];
+            let constrains = matchingPairs[letter];
+            for (let [a, b] of constrains) {
+                if ((i === a && combination[b] !== letter) || (i === b && combination[a] !== letter)) {
+                    isValid = false;
+                    break;
+                }
+            }
+        }
+        if (isValid) {
+            tileTypes.push(combination.join(''));
+        }
+    }
+    console.log({ tileTypes     });
+
     let tiles = tileTypes.map(t => {
         return {
             name: t,
             adjacencies: generateAdjacencies(t),
+            weight: floor(random(10)),
             draw: () => {
                 for (let i = 0; i < 6; i++) {
                     let startAngle = -PI / 6 + TAU / 6 * i;
@@ -92,9 +125,53 @@ function setup() {
     wfcGenerator = wfc.execute();
 }
 
-function draw() {
-    if (done) return;
+function iterateOverGrid(callback) {
+    let R = gridRadius;
+    for (let z = 0; z <= R; z++) { callback(R - z, -R, z, 'bottom-right') } // Y is constant
+    for (let x = 0; x <= R; x++) { callback(-x, x - R, R, 'bottom') } // Z is constant
+    for (let y = 0; y <= R; y++) { callback(-R, y, R - y, 'bottom-left') } // X is constant
+    for (let z = 0; z <= R; z++) { callback(-z, R, z - R, 'top-left') } // Y is constant
+    for (let x = 0; x <= R; x++) { callback(x, R - x, -R, 'top') } // Z is constant
+    for (let y = 0; y <= R; y++) { callback(R, -y, y - R, 'top-right') } // X is constant
+}
 
+
+
+let balls = [];
+function drawBalls() {
+    // Translat to the center of the canvas
+    push();
+    translate(width / 2, height / 2);
+    if (balls.length === 0) {
+        // Initialize the balls
+        // Iterate over each side of the grid
+        iterateOverGrid((x, y, z, dir) => {
+            console.log(x, y, z, dir);
+            balls.push({
+                x: x,
+                y: y,
+                z: z,
+                dir: dir,
+            });
+        });
+    } else {
+        balls.forEach(ball => {
+            // Draw a ball centered on the hexagon at the coords
+            let pixelPos = cubicToPixel(ball.x, ball.y, ball.z);
+            console.log(pixelPos);
+            push();
+            noFill();
+            stroke(0);
+            circle(pixelPos.x, pixelPos.y, hexSize * 0.5);
+            pop();
+        });
+    }
+    pop();
+}
+
+function draw() {
+
+    if (frameCount > 30) return;
     // Clear background and setup coordinate system
     background(255);
     push();
@@ -115,7 +192,7 @@ function draw() {
                 fill(textColor);
                 noStroke();
                 textAlign(CENTER, CENTER);
-                textSize(20);
+                textSize(12);
                 text(cell.choices[0].name, 0, -20);
                 // Draw adjacencies near the edge of the hexagon
                 for (let i = 0; i < 6; i++) {
@@ -148,6 +225,8 @@ function draw() {
             }
         }
     }
+
+    if (done) drawBalls();
 }
 
 function drawHexGrid() {
