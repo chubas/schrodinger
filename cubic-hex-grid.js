@@ -98,12 +98,12 @@ class CubicHexagonalGrid {
     // Cubic coordinate directions for hexagonal grid
     // Order: +x, +x-y, -y, -x, -x+y, +y (clockwise from right)
     const directions = [
-      [1, -1, 0],  // +x direction
-      [1, 0, -1],  // +x-y direction  
-      [0, 1, -1],  // -y direction
-      [-1, 1, 0],  // -x direction
-      [-1, 0, 1],  // -x+y direction
-      [0, -1, 1]   // +y direction
+      [1, -1, 0],
+      [0, -1, 1],
+      [-1, 0, 1],
+      [-1, 1, 0],
+      [0, 1, -1],
+      [1, 0, -1],
     ];
     
     return directions.map(([dx, dy, dz]) => {

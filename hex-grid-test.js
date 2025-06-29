@@ -2,8 +2,9 @@
 // Cubic coordinates: (x, y, z) where x + y + z = 0
 
 // Grid parameters
-let hexSize = 80;  // Radius from center to vertex
-let gridRadius = 6; // How many hexagons from center
+let hexSize = 60;  // Radius from center to vertex
+let gridRadius = 8; // How many hexagons from center
+let debug = true;
 
 // Colors
 let hexFillColor;
@@ -13,31 +14,29 @@ let textColor;
 let wfc;
 let wfcGenerator;
 let done;
+let chunkSize = 10;
 
 let tiles;
-let colors = [
-    // Pick desaturated colors for visibility
-    '#fdffb6', '#ff8fab', '#34a0a4'
-]
-
-let drawHexTile = (fillColor) => {
-    // Origin will be translated to the center of the hexagon
-    return (hexSize) => {
-        push();
-        fill(fillColor);
-        noStroke();
-        // Draw a hexagon
-        beginShape();
-        for (let i = 0; i < 6; i++) {
-            const angle = TWO_PI / 6 * i + PI / 6; // Add PI/6 for flat-top orientation
-            const hx = cos(angle) * hexSize;
-            const hy = sin(angle) * hexSize;
-            vertex(hx, hy);
-        }
-        endShape(CLOSE);
-        pop();
-    }
+let colors = {
+    'A': 'yellow',
+    'B': 'green',
+    'C': 'lightblue',
 }
+
+let generateAdjacencies = (types) => {
+    let adjacencies = [];
+    // Right adjacency: A with A or any with any
+    adjacencies.push(types[0] === 'A' ? 'A' : 'a');
+    adjacencies.push(types[1] === 'C' ? 'C' : 'c');
+    adjacencies.push(types[2] === 'B' ? 'B' : 'b');
+    // Same for opposite sides
+    adjacencies.push(types[3] === 'A' ? 'A' : 'a');
+    adjacencies.push(types[4] === 'C' ? 'C' : 'c');
+    adjacencies.push(types[5] === 'B' ? 'B' : 'b');
+
+    return adjacencies;
+}
+
 
 function setup() {
     // createCanvas(1200, 1200);
@@ -48,13 +47,44 @@ function setup() {
     hexStrokeColor = color(100, 150, 200);
     textColor = color(50, 50, 50);
 
-    tiles = [
-        { name: 'A-ALL', adjacencies: ['X', 'X', 'X', 'X', 'X', 'X'], draw: drawHexTile(colors[0]) },
-        { name: 'B-ALL', adjacencies: ['X', 'X', 'X', 'X', 'X', 'X'], draw: drawHexTile(colors[1]) },
-        { name: 'C-ALL', adjacencies: ['X', 'X', 'X', 'X', 'X', 'X'], draw: drawHexTile(colors[2]) }
+    let tileTypes = [
+        'AAAAAA',
+        'BBBBBB',
+        'CCCCCC',
+        'ACCCAA',
+        'CAAACC',
+        'AAABBB',
+        'BBBAAA',
+        'BBCCCB',
+        'CCBBBC',
     ]
+    let tiles = tileTypes.map(t => {
+        return {
+            name: t,
+            adjacencies: generateAdjacencies(t),
+            draw: () => {
+                for (let i = 0; i < 6; i++) {
+                    let startAngle = -PI / 6 + TAU / 6 * i;
+                    let angle = startAngle + TAU / 6;
+                    let c = colors[t[i]];
+                    fill(c);
+                    noStroke();
+                    // Draw the triangle from center to the two vertices
+                    triangle(
+                        0, 0,
+                        cos(startAngle) * hexSize, sin(startAngle) * hexSize,
+                        cos(angle) * hexSize, sin(angle) * hexSize,
+                    );
+                }
+            }
+        }
+    })
+
+    console.log(tiles);
+
 
     let grid = new CubicHexagonalGrid(gridRadius);
+
     wfc = new Schrodinger.WFC(tiles, grid, {
         maxRetries: 10,
         // logLevel: Schrodinger.LogLevel.DEBUG, // Enable DEBUG logging to see exhaustion checks
@@ -80,21 +110,42 @@ function draw() {
 
         if (cell.collapsed && cell.choices.length > 0) {
             cell.choices[0].draw(hexSize);
+            if (debug) {
+                // Draw cell name at the center
+                fill(textColor);
+                noStroke();
+                textAlign(CENTER, CENTER);
+                textSize(20);
+                text(cell.choices[0].name, 0, -20);
+                // Draw adjacencies near the edge of the hexagon
+                for (let i = 0; i < 6; i++) {
+                    let angle = TAU / 6 * i;
+                    let d = hexSize * 0.7;
+                    let x = cos(angle ) * d;
+                    let y = sin(angle) * d;
+                    text(cell.choices[0].adjacencies[i], x, y);
+                }
+            }
         }
 
         pop();
     }
 
     pop(); // Restore coordinate system
-    drawHexGrid();
+    if (debug) {
+        drawHexGrid();
+    }
 
     // Continue WFC generation
     if (wfcGenerator) {
-        let result = wfcGenerator.next();
-        if (result.done) {
-            wfcGenerator = null;
-            done = true;
-            console.log("WFC completed!");
+        for (let i = 0; i < chunkSize; i++) {
+            if (!wfcGenerator) break;
+            let result = wfcGenerator.next();
+            if (result.done) {
+                wfcGenerator = null;
+                done = true;
+                console.log("WFC completed!");
+            }
         }
     }
 }
@@ -107,6 +158,8 @@ function drawHexGrid() {
 
     // Generate all cubic coordinates within the grid radius
     const hexCoords = generateHexCoordinates(gridRadius);
+    stroke('#00000010');
+    strokeWeight(2);
 
     // Draw each hexagon
     for (const coords of hexCoords) {
@@ -153,11 +206,6 @@ function cubicToPixel(x, y, z) {
 function drawHexagon(px, py, coords) {
     push();
     translate(px, py);
-
-    // Draw hexagon shape
-    // fill(hexFillColor);
-    stroke(hexStrokeColor);
-    strokeWeight(2);
 
     beginShape();
     for (let i = 0; i < 6; i++) {
