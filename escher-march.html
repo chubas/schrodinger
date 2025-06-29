@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Escher March - WFC Composition</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: #222;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        
+        .controls {
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .controls button {
+            background: #444;
+            color: white;
+            border: 1px solid #666;
+            padding: 8px 16px;
+            margin: 0 5px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        
+        .controls button:hover {
+            background: #555;
+        }
+        
+        .info {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 14px;
+            color: #ccc;
+        }
+        
+        #canvas-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="info">
+        <h2>Escher March - WFC Generated Isometric Composition</h2>
+        <p>Entities march through surfaces in 3 different orientations treating different colors as "floor"</p>
+        <p><strong>Controls:</strong> R - Regenerate | Space - Reset Entities</p>
+    </div>
+    
+    <div class="controls">
+        <button onclick="regeneratePattern()">Regenerate Pattern (R)</button>
+        <button onclick="resetEntities()">Reset Entities (Space)</button>
+        <button onclick="toggleEntityCount()">Change Entity Count</button>
+    </div>
+    
+    <div id="canvas-container"></div>
+
+    <!-- Load p5.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+
+    <!-- Load our custom EventEmitter implementation -->
+    <script src="EventEmitter.js"></script>
+
+    <!-- Define global events module for compatibility -->
+    <script>
+        // Create a global events module for compatibility
+        window.events = { EventEmitter: window.EventEmitter };
+
+        // Define a global require function for compatibility
+        window.require = function(moduleName) {
+            if (moduleName === 'events') {
+                return window.events;
+            }
+            throw new Error(`Module ${moduleName} not found`);
+        };
+    </script>
+    
+    <!-- Load the Schrodinger WFC library -->
+    <script src="dist/index.global.js"></script>
+    
+    <!-- Load our Escher march composition -->
+    <script src="escher-march.js"></script>
+    
+    <script>
+        // HTML interface functions
+        function regeneratePattern() {
+            if (typeof keyPressed === 'function') {
+                // Simulate pressing 'R' key
+                key = 'R';
+                keyPressed();
+            }
+        }
+        
+        function resetEntities() {
+            if (typeof keyPressed === 'function') {
+                // Simulate pressing space key
+                key = ' ';
+                keyPressed();
+            }
+        }
+        
+        function toggleEntityCount() {
+            if (typeof entityCount !== 'undefined') {
+                entityCount = entityCount === 30 ? 60 : (entityCount === 60 ? 10 : 30);
+                if (typeof initializeEntities === 'function') {
+                    initializeEntities();
+                }
+            }
+        }
+        
+        // Log when everything is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Escher March composition loaded');
+            console.log('- Yellow entities see yellow as floor');
+            console.log('- Red entities see green as floor'); 
+            console.log('- Bright yellow entities see blue as floor');
+        });
+    </script>
+</body>
+</html> 

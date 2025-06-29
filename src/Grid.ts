@@ -6,6 +6,7 @@ export type Cell<Coords = any> = {
   collapsed: boolean;
   forbidden: TileDef[];
   coords: Coords;
+  value?: TileDef; // The selected tile when collapsed
 };
 
 export type GridSnapshot = {

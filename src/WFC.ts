@@ -117,7 +117,7 @@ class SnapshotManager {
         coords: cell.coords,
         previousChoices: cell.choices.map(t => t.name),
         previousCollapsed: cell.collapsed,
-        previousValue: cell.collapsed && cell.choices.length > 0 ? cell.choices[0].name : undefined
+        previousValue: cell.value?.name
       });
     }
 
@@ -197,6 +197,14 @@ class SnapshotManager {
       // Restore choices
       cell.choices = resolvedTiles;
       cell.collapsed = delta.previousCollapsed;
+      
+      // Restore value if it was collapsed
+      if (delta.previousValue && delta.previousCollapsed) {
+        const valueTile = tileMap.get(delta.previousValue);
+        cell.value = valueTile;
+      } else {
+        cell.value = undefined;
+      }
     }
 
     return true;
@@ -418,6 +426,7 @@ export class WFC extends EventEmitter {
     for (const [cell] of this.#grid.iterate()) {
       cell.choices = [...this.tileDefs];
       cell.collapsed = false;
+      cell.value = undefined;
     }
   }
 
@@ -730,6 +739,7 @@ export class WFC extends EventEmitter {
 
       cell.collapsed = true;
       cell.choices = [tile];
+      cell.value = tile;
       affectedCells.push(cell);
     }
 
@@ -780,6 +790,7 @@ export class WFC extends EventEmitter {
       // Auto-collapse if only one choice remains
       if (cell.choices.length === 1 && !cell.collapsed) {
         cell.collapsed = true;
+        cell.value = cell.choices[0];
         this.queueNeighborsForPropagation(cell);
       }
     }

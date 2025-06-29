@@ -456,7 +456,7 @@ function draw() {
       // console.log(`${coords[0]}, ${coords[1]} | Adjacencies: ${cell.choices[0].adjacencies} --- ${cell.choices[0].id}`);
       pop();
       // Also draw the adjacencies
-      drawAdjacencies(cell, x, y);
+      // drawAdjacencies(cell, x, y);
       
     } else {
       // Draw uncollapsed cells
@@ -493,14 +493,40 @@ function draw() {
       wfcGenerator = null;
     }
   }
-  // Draw grid
-  stroke(0);
-  strokeWeight(1);
+  drawGrid();
+  drawHexGrid();
+}
+
+let drawGrid = () => {
+  stroke('#00000020');
+  strokeWeight(2);
   for (let x = 0; x < tileX; x++) {
     line(x * tileWidth, 0, x * tileWidth, tileY * tileHeight);
   }
   for (let y = 0; y < tileY; y++) {
     line(0, y * tileHeight, tileX * tileWidth, y * tileHeight);
+  }
+}
+
+function drawHexGrid() {
+  stroke(0);
+  strokeWeight(2);
+  for (let x = 0; x < tileX; x++) {
+    for (let y = 0; y < tileY; y++) {
+      push();
+      translate(x * tileWidth, y * tileHeight);
+      if (y % 2 === 0) {
+        line(0, 0, tileWidth / 2, tileHeight / 3);
+        line(tileWidth / 2, tileHeight / 3, tileWidth, 0);
+        line(tileWidth / 2, tileHeight / 3, tileWidth / 2, tileHeight);
+      } else {
+        line(0, tileHeight / 3, tileWidth / 2, 0);
+        line(tileWidth / 2, 0, tileWidth, tileHeight / 3);
+        line(0, tileHeight / 3, 0, tileHeight);
+        line(tileWidth, tileHeight / 3, tileWidth, tileHeight);
+      }
+      pop();
+    }
   }
 }
 
