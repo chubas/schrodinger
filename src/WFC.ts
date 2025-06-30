@@ -434,7 +434,15 @@ export class WFC extends EventEmitter {
     if (!tileDefs || tileDefs.length === 0) {
       throw new Error("No tile definitions provided");
     }
+    
+    // Check for duplicate tile names
+    const tileNames = new Set<string>();
     for (const tileDef of tileDefs) {
+      if (tileNames.has(tileDef.name)) {
+        throw new Error(`Duplicate tile name: ${tileDef.name}`);
+      }
+      tileNames.add(tileDef.name);
+      
       if (!tileDef.adjacencies || tileDef.adjacencies.length === 0) {
         throw new Error(`Tile ${tileDef.name} has no adjacencies defined`);
       }
@@ -603,8 +611,21 @@ export class WFC extends EventEmitter {
     
     if (result.success) {
       this.log(LogLevel.DEBUG, `Collapsed ${group.cells.length} cells at depth ${node.depth}`);
-      if (emitEvents) this.emit("collapse", group);
-      yield { type: "collapse", group, affectedCells: result.affectedCells };
+      
+      // Update the group with actual values from the grid for the event
+      const groupWithValues: CollapseGroup = {
+        ...group,
+        cells: group.cells.map(cellCollapse => {
+          const gridCell = this.#grid.get(cellCollapse.coords);
+          return {
+            coords: cellCollapse.coords,
+            value: gridCell?.value
+          };
+        })
+      };
+      
+      if (emitEvents) this.emit("collapse", groupWithValues);
+      yield { type: "collapse", group: groupWithValues, affectedCells: result.affectedCells };
       // Keep the snapshot alive since collapse succeeded - we might need to backtrack to it
       return result;
     } else {

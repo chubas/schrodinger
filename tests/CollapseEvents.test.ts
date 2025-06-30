@@ -70,8 +70,8 @@ describe("WFC Collapse Events", () => {
         });
 
         wfc.on("complete", () => {
-          // With the new implementation, we get 2 collapse events
-          expect(collapseCount).toBe(2);
+          // For a 1x1 grid, we should get exactly 1 collapse event
+          expect(collapseCount).toBe(1);
           resolve();
         });
 
@@ -92,8 +92,8 @@ describe("WFC Collapse Events", () => {
         });
 
         wfc.on("complete", () => {
-          // With the new implementation, we get 2 collapse events
-          expect(collapseCount).toBe(2);
+          // For a 1x1 grid with seed, we should get exactly 1 collapse event
+          expect(collapseCount).toBe(1);
           resolve();
         });
 
