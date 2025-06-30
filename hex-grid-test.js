@@ -2,8 +2,8 @@
 // Cubic coordinates: (x, y, z) where x + y + z = 0
 
 // Grid parameters
-let hexSize = 60;  // Radius from center to vertex
-let gridRadius = 8; // How many hexagons from center
+let hexSize = 40;  // Radius from center to vertex
+let gridRadius = 12; // How many hexagons from center
 let debug = true;
 
 // Colors
@@ -38,22 +38,32 @@ let generateAdjacencies = (types) => {
 function* allCombinations(array, positions) {
     const n = array.length;
     const indices = Array(positions).fill(0);
-  
+
     while (true) {
-      yield indices.map(i => array[i]);
-  
-      // Increment like a base-n number
-      let i = positions - 1;
-      while (i >= 0) {
-        indices[i]++;
-        if (indices[i] < n) break;
-        indices[i] = 0;
-        i--;
-      }
-  
-      if (i < 0) return; // We're done
+        yield indices.map(i => array[i]);
+
+        // Increment like a base-n number
+        let i = positions - 1;
+        while (i >= 0) {
+            indices[i]++;
+            if (indices[i] < n) break;
+            indices[i] = 0;
+            i--;
+        }
+
+        if (i < 0) return; // We're done
     }
-  }
+}
+
+let animationFrames = 120;
+let getAnimationFrame = () => {
+    let f = floor(frameCount / animationFrames);
+    // Return the animation frame, and the value from 0 to 1 for the current frame
+    return {
+        frame: f,
+        t: frameCount % animationFrames / animationFrames,
+    }
+}
 
 function setup() {
     // createCanvas(1200, 1200);
@@ -74,7 +84,7 @@ function setup() {
     for (let combination of allCombinations(['A', 'B', 'C'], 6)) {
         // It's a valid tile as long as the matching pairs are the same if either is the letter
         let isValid = true;
-        for (let i = 0; i < 6; i++) {   
+        for (let i = 0; i < 6; i++) {
             let letter = combination[i];
             let constrains = matchingPairs[letter];
             for (let [a, b] of constrains) {
@@ -88,7 +98,7 @@ function setup() {
             tileTypes.push(combination.join(''));
         }
     }
-    console.log({ tileTypes     });
+    console.log({ tileTypes });
 
     let tiles = tileTypes.map(t => {
         return {
@@ -146,7 +156,7 @@ function drawBalls() {
         // Initialize the balls
         // Iterate over each side of the grid
         iterateOverGrid((x, y, z, dir) => {
-            console.log(x, y, z, dir);
+            // console.log(x, y, z, dir);
             balls.push({
                 x: x,
                 y: y,
@@ -162,7 +172,11 @@ function drawBalls() {
             push();
             noFill();
             stroke(0);
-            circle(pixelPos.x, pixelPos.y, hexSize * 0.5);
+            // circle(pixelPos.x, pixelPos.y, hexSize * 0.5);
+            let { frame, t } = getAnimationFrame();
+            let r = hexSize * 0.5 * (1 - t);
+            circle(pixelPos.x, pixelPos.y, r);
+
             pop();
         });
     }
@@ -171,7 +185,6 @@ function drawBalls() {
 
 function draw() {
 
-    if (frameCount > 30) return;
     // Clear background and setup coordinate system
     background(255);
     push();
@@ -198,7 +211,7 @@ function draw() {
                 for (let i = 0; i < 6; i++) {
                     let angle = TAU / 6 * i;
                     let d = hexSize * 0.7;
-                    let x = cos(angle ) * d;
+                    let x = cos(angle) * d;
                     let y = sin(angle) * d;
                     text(cell.choices[0].adjacencies[i], x, y);
                 }
@@ -237,7 +250,7 @@ function drawHexGrid() {
 
     // Generate all cubic coordinates within the grid radius
     const hexCoords = generateHexCoordinates(gridRadius);
-    stroke('#00000010');
+    stroke('#FF000080');
     strokeWeight(2);
 
     // Draw each hexagon
