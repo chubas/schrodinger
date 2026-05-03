@@ -4,7 +4,7 @@
 // Grid parameters
 let hexSize = 40;  // Radius from center to vertex
 let gridRadius = 12; // How many hexagons from center
-let debug = true;
+let debug = false;
 
 // Colors
 let hexFillColor;
@@ -18,9 +18,12 @@ let chunkSize = 10;
 
 let tiles;
 let colors = {
-    'A': 'yellow',
-    'B': 'green',
-    'C': 'lightblue',
+    // 'A': 'yellow',
+    // 'B': 'green',
+    // 'C': 'lightblue',
+    'A': '#FFFFFF',
+    'B': '#D9D9D9',
+    'C': '#A3A3A3',
 }
 
 let generateAdjacencies = (types) => {
@@ -168,7 +171,7 @@ function drawBalls() {
         balls.forEach(ball => {
             // Draw a ball centered on the hexagon at the coords
             let pixelPos = cubicToPixel(ball.x, ball.y, ball.z);
-            console.log(pixelPos);
+            // console.log(pixelPos);
             push();
             noFill();
             stroke(0);

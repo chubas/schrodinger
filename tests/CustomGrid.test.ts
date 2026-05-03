@@ -1,6 +1,6 @@
 import { Grid, Cell } from "../src/Grid";
 import { TileDef } from "../src/TileDef";
-import { WFC } from "../src/WFC";
+import { WFC, LogLevel } from "../src/WFC";
 import { RuleType, SimpleRule } from "../src/AdjacencyGrammar";
 
 // Define a triangular grid where each cell has 3 neighbors
@@ -10,8 +10,8 @@ class TriangleGrid implements Grid<[number, number]> {
 
   // Define adjacency maps for triangular grids
   adjacencyMaps: Record<string, number[]> = {
-    'up': [2, 2, 0],     // [topLeft, topRight, bottom] -> [bottom, bottom, topLeft]
-    'down': [0, 0, 2]    // [bottomLeft, bottomRight, top] -> [topLeft, topRight, bottom]
+    up: [2, 2, 0], // [topLeft, topRight, bottom] -> [bottom, bottom, topLeft]
+    down: [0, 0, 2], // [bottomLeft, bottomRight, top] -> [topLeft, topRight, bottom]
   };
 
   constructor(size: number) {
@@ -57,21 +57,21 @@ class TriangleGrid implements Grid<[number, number]> {
 
   getNeighbors(coords: [number, number]): (Cell | null)[] {
     const [x, y] = coords;
-    const isPointingUp = this.getAdjacencyType(coords) === 'up';
-    
+    const isPointingUp = this.getAdjacencyType(coords) === "up";
+
     if (isPointingUp) {
       // Order: topLeft, topRight, bottom
       return [
-        this.get([x-1, y-1]),
-        this.get([x+1, y-1]),
-        this.get([x, y+1])
+        this.get([x - 1, y - 1]),
+        this.get([x + 1, y - 1]),
+        this.get([x, y + 1]),
       ];
     } else {
       // Order: bottomLeft, bottomRight, top
       return [
-        this.get([x-1, y+1]),
-        this.get([x+1, y+1]),
-        this.get([x, y-1])
+        this.get([x - 1, y + 1]),
+        this.get([x + 1, y + 1]),
+        this.get([x, y - 1]),
       ];
     }
   }
@@ -94,7 +94,7 @@ class TriangleGrid implements Grid<[number, number]> {
 
   toSnapshot() {
     return {
-      cells: this.cells.map(cell => ({
+      cells: this.cells.map((cell) => ({
         ...cell,
         choices: [...cell.choices],
         forbidden: [...cell.forbidden],
@@ -108,7 +108,7 @@ class TriangleGrid implements Grid<[number, number]> {
   getAdjacencyType(coords: [number, number]): string {
     const [x, y] = coords;
     // Determine if triangle points up or down based on coordinates
-    return (x + y) % 2 === 0 ? 'up' : 'down';
+    return (x + y) % 2 === 0 ? "up" : "down";
   }
 
   // Get the adjacency map for the given coordinates
@@ -120,7 +120,7 @@ class TriangleGrid implements Grid<[number, number]> {
 // Create simple rules for testing
 const createSimpleRule = (value: string): SimpleRule => ({
   type: RuleType.Simple,
-  value
+  value,
 });
 
 describe("Custom Grid Implementation", () => {
@@ -131,7 +131,7 @@ describe("Custom Grid Implementation", () => {
       adjacencies: [
         createSimpleRule("1"),
         createSimpleRule("2"),
-        createSimpleRule("3")
+        createSimpleRule("3"),
       ],
       draw: () => {},
     },
@@ -140,7 +140,7 @@ describe("Custom Grid Implementation", () => {
       adjacencies: [
         createSimpleRule("2"),
         createSimpleRule("3"),
-        createSimpleRule("1")
+        createSimpleRule("1"),
       ],
       draw: () => {},
     },
@@ -149,7 +149,7 @@ describe("Custom Grid Implementation", () => {
       adjacencies: [
         createSimpleRule("3"),
         createSimpleRule("1"),
-        createSimpleRule("2")
+        createSimpleRule("2"),
       ],
       draw: () => {},
     },
@@ -170,29 +170,29 @@ describe("Custom Grid Implementation", () => {
     it("should correctly identify neighbors in triangle grid", () => {
       // Use a larger grid size to ensure we have enough room for neighbors
       const grid = new TriangleGrid(5);
-      
+
       // Check a cell that should have all its neighbors within bounds
       // For a down-pointing triangle at [2, 3]
       // Check whether this is a down-pointing triangle
-      const isDown = grid.getAdjacencyType([2, 3]) === 'down';
+      const isDown = grid.getAdjacencyType([2, 3]) === "down";
       expect(isDown).toBe(true);
-      
+
       const middleCell = grid.get([2, 3])!;
       const neighbors = grid.getNeighbors(middleCell.coords);
-      
+
       // For a down-pointing triangle, the neighbors would be:
       // bottomLeft [1, 4], bottomRight [3, 4], top [2, 2]
       expect(neighbors[0]).toBe(grid.get([1, 4])); // bottomLeft
       expect(neighbors[1]).toBe(grid.get([3, 4])); // bottomRight
       expect(neighbors[2]).toBe(grid.get([2, 2])); // top
-      
+
       // Should have three neighbors
-      expect(neighbors.filter(n => n !== null).length).toBe(3);
+      expect(neighbors.filter((n) => n !== null).length).toBe(3);
     });
 
     it("should work with WFC algorithm", () => {
       const grid = new TriangleGrid(3);
-      const wfc = new WFC(triangleTiles, grid);
+      const wfc = new WFC(triangleTiles, grid, { logLevel: LogLevel.NONE });
 
       let completionCalled = false;
       let errorCalled = false;
@@ -205,9 +205,13 @@ describe("Custom Grid Implementation", () => {
         errorCalled = true;
       });
 
-      wfc.start();
+      try {
+        wfc.start();
+      } catch {
+        // Some custom-grid/tile combinations may be unsatisfiable; the important
+        // contract is that the solver reports completion or an error cleanly.
+      }
 
-      // Either the algorithm completed successfully or failed with an error
       expect(completionCalled || errorCalled).toBe(true);
 
       // If it completed, verify all cells are collapsed

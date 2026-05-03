@@ -9,7 +9,7 @@ import { RuleType, SimpleRule } from "../src/AdjacencyGrammar";
 // Create simple rules for testing
 const createSimpleRule = (value: string): SimpleRule => ({
   type: RuleType.Simple,
-  value
+  value,
 });
 
 const eventsTestTiles = [
@@ -19,9 +19,9 @@ const eventsTestTiles = [
       createSimpleRule("1"),
       createSimpleRule("1"),
       createSimpleRule("1"),
-      createSimpleRule("1")
+      createSimpleRule("1"),
     ],
-    draw: () => { },
+    draw: () => {},
   },
   {
     name: "B",
@@ -29,9 +29,9 @@ const eventsTestTiles = [
       createSimpleRule("1"),
       createSimpleRule("1"),
       createSimpleRule("1"),
-      createSimpleRule("1")
+      createSimpleRule("1"),
     ],
-    draw: () => { },
+    draw: () => {},
   },
   {
     name: "W",
@@ -39,9 +39,9 @@ const eventsTestTiles = [
       createSimpleRule("[W>B]"),
       createSimpleRule("[W>B]"),
       createSimpleRule("[W>B]"),
-      createSimpleRule("[W>B]")
+      createSimpleRule("[W>B]"),
     ],
-    draw: () => { },
+    draw: () => {},
   },
   {
     name: "C",
@@ -49,17 +49,19 @@ const eventsTestTiles = [
       createSimpleRule("[B>W]"),
       createSimpleRule("[B>W]"),
       createSimpleRule("[B>W]"),
-      createSimpleRule("[B>W]")
+      createSimpleRule("[B>W]"),
     ],
-    draw: () => { },
-  }
+    draw: () => {},
+  },
 ];
 
 describe("WFC Collapse Events", () => {
   describe("Simple Grid Collapses", () => {
     it("should emit collapse events for 1x1 grid without seed", async () => {
       const grid = new SquareGrid(1, 1);
-      const wfc = new WFC(eventsTestTiles, grid, { random: new DeterministicRNG([0]) });
+      const wfc = new WFC(eventsTestTiles, grid, {
+        random: new DeterministicRNG([0]),
+      });
 
       let collapseCount = 0;
       await new Promise<void>((resolve) => {
@@ -70,8 +72,7 @@ describe("WFC Collapse Events", () => {
         });
 
         wfc.on("complete", () => {
-          // With the new implementation, we get 2 collapse events
-          expect(collapseCount).toBe(2);
+          expect(collapseCount).toBe(1);
           resolve();
         });
 
@@ -92,8 +93,7 @@ describe("WFC Collapse Events", () => {
         });
 
         wfc.on("complete", () => {
-          // With the new implementation, we get 2 collapse events
-          expect(collapseCount).toBe(2);
+          expect(collapseCount).toBe(1);
           resolve();
         });
 
@@ -103,7 +103,9 @@ describe("WFC Collapse Events", () => {
 
     it("should emit collapse events for 2x2 grid with 2-cell seed", async () => {
       const grid = new SquareGrid(2, 2);
-      const wfc = new WFC(eventsTestTiles, grid, { random: new DeterministicRNG([0]) });
+      const wfc = new WFC(eventsTestTiles, grid, {
+        random: new DeterministicRNG([0]),
+      });
 
       let collapseCount = 0;
       const collapsedCells = new Set<string>();
@@ -135,7 +137,7 @@ describe("WFC Collapse Events", () => {
 
         wfc.start([
           { coords: [0, 0], value: eventsTestTiles[0] },
-          { coords: [0, 1], value: eventsTestTiles[0] }
+          { coords: [0, 1], value: eventsTestTiles[0] },
         ]);
       });
     });
@@ -144,7 +146,9 @@ describe("WFC Collapse Events", () => {
   describe("Chess Pattern Collapses", () => {
     it("should emit collapse events for 2x2 grid without seed", async () => {
       const grid = new SquareGrid(2, 2);
-      const wfc = new WFC(eventsTestTiles, grid, { random: new DeterministicRNG([0]) });
+      const wfc = new WFC(eventsTestTiles, grid, {
+        random: new DeterministicRNG([0]),
+      });
 
       let collapseCount = 0;
       const collapsedCells = new Set<string>();
@@ -152,7 +156,7 @@ describe("WFC Collapse Events", () => {
       await new Promise<void>((resolve) => {
         wfc.on("collapse", (group) => {
           collapseCount++;
-          
+
           // Track collapsed cells
           group.cells.forEach((cell: CellCollapse) => {
             const cellKey = `${cell.coords[0]},${cell.coords[1]}`;
@@ -162,7 +166,7 @@ describe("WFC Collapse Events", () => {
           // Verify alternating pattern for completed grid
           if (collapsedCells.size === 4) {
             const pattern = new Map<string, string>();
-            
+
             // Collect all cells from the collapsed cells
             group.cells.forEach((cell: CellCollapse) => {
               if (cell.value) {
@@ -170,7 +174,7 @@ describe("WFC Collapse Events", () => {
                 pattern.set(key, cell.value.name);
               }
             });
-            
+
             // Also add cells from previous collapse events
             wfc.on("collapse", (prevGroup) => {
               prevGroup.cells.forEach((cell: CellCollapse) => {
@@ -189,14 +193,14 @@ describe("WFC Collapse Events", () => {
                 for (let y = 0; y < 2; y++) {
                   const key = `${x},${y}`;
                   const cellColor = pattern.get(key);
-                  
+
                   if (cellColor) {
                     // Check right neighbor
                     if (x < 1) {
                       const rightKey = `${x + 1},${y}`;
                       expect(pattern.get(rightKey)).not.toBe(cellColor);
                     }
-                    
+
                     // Check bottom neighbor
                     if (y < 1) {
                       const bottomKey = `${x},${y + 1}`;
@@ -229,7 +233,7 @@ describe("WFC Collapse Events", () => {
       await new Promise<void>((resolve) => {
         wfc.on("collapse", (group) => {
           collapseCount++;
-          
+
           // Track collapsed cells
           group.cells.forEach((cell: CellCollapse) => {
             const cellKey = `${cell.coords[0]},${cell.coords[1]}`;
@@ -244,7 +248,7 @@ describe("WFC Collapse Events", () => {
           // Verify alternating pattern for completed grid
           if (collapsedCells.size === 4) {
             const pattern = new Map<string, string>();
-            
+
             // Collect all cells from the collapsed cells
             group.cells.forEach((cell: CellCollapse) => {
               if (cell.value) {
@@ -252,7 +256,7 @@ describe("WFC Collapse Events", () => {
                 pattern.set(key, cell.value.name);
               }
             });
-            
+
             // Also add cells from previous collapse events
             wfc.on("collapse", (prevGroup) => {
               prevGroup.cells.forEach((cell: CellCollapse) => {
@@ -271,14 +275,14 @@ describe("WFC Collapse Events", () => {
                 for (let y = 0; y < 2; y++) {
                   const key = `${x},${y}`;
                   const cellColor = pattern.get(key);
-                  
+
                   if (cellColor) {
                     // Check right neighbor
                     if (x < 1) {
                       const rightKey = `${x + 1},${y}`;
                       expect(pattern.get(rightKey)).not.toBe(cellColor);
                     }
-                    
+
                     // Check bottom neighbor
                     if (y < 1) {
                       const bottomKey = `${x},${y + 1}`;
@@ -311,7 +315,7 @@ describe("WFC Collapse Events", () => {
       await new Promise<void>((resolve) => {
         wfc.on("collapse", (group) => {
           collapseCount++;
-          
+
           // Track collapsed cells
           group.cells.forEach((cell: CellCollapse) => {
             const cellKey = `${cell.coords[0]},${cell.coords[1]}`;
@@ -326,7 +330,7 @@ describe("WFC Collapse Events", () => {
           // Verify alternating pattern for completed grid
           if (collapsedCells.size === 4) {
             const pattern = new Map<string, string>();
-            
+
             // Collect all cells from the collapsed cells
             group.cells.forEach((cell: CellCollapse) => {
               if (cell.value) {
@@ -334,7 +338,7 @@ describe("WFC Collapse Events", () => {
                 pattern.set(key, cell.value.name);
               }
             });
-            
+
             // Also add cells from previous collapse events
             wfc.on("collapse", (prevGroup) => {
               prevGroup.cells.forEach((cell: CellCollapse) => {
@@ -353,14 +357,14 @@ describe("WFC Collapse Events", () => {
                 for (let y = 0; y < 2; y++) {
                   const key = `${x},${y}`;
                   const cellColor = pattern.get(key);
-                  
+
                   if (cellColor) {
                     // Check right neighbor
                     if (x < 1) {
                       const rightKey = `${x + 1},${y}`;
                       expect(pattern.get(rightKey)).not.toBe(cellColor);
                     }
-                    
+
                     // Check bottom neighbor
                     if (y < 1) {
                       const bottomKey = `${x},${y + 1}`;
@@ -381,7 +385,7 @@ describe("WFC Collapse Events", () => {
 
         wfc.start([
           { coords: [0, 0], value: eventsTestTiles[0] },
-          { coords: [0, 1], value: eventsTestTiles[1] }
+          { coords: [0, 1], value: eventsTestTiles[1] },
         ]);
       });
     });

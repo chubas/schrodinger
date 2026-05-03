@@ -32,3 +32,24 @@ export class DeterministicRNG implements RandomLib {
     this.currentIndex = 0;
   }
 }
+
+export class RecordingRNG implements RandomLib {
+  public readonly draws: number[] = [];
+
+  constructor(private readonly source: RandomLib) {}
+
+  random(): number {
+    const value = this.source.random();
+    this.draws.push(value);
+    return value;
+  }
+
+  setSeed(seed: string | number): void {
+    this.draws.length = 0;
+    this.source.setSeed(seed);
+  }
+}
+
+export const createReplayRNG = (draws: number[]): DeterministicRNG => {
+  return new DeterministicRNG(draws.length > 0 ? draws : [0]);
+};
