@@ -11,6 +11,7 @@ pnpm-debug.log*
 # Build output
 dist/
 dist-benchmark/
+dist-stress-test/
 out/
 
 # Logs
@@ -40,3 +41,4 @@ coverage/
 .env.*.local
 
 *benchmark*.json
+stress-test/results/*.json
