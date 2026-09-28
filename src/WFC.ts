@@ -453,6 +453,7 @@ export class WFC extends EventEmitter {
     if (array.length === 0) {
       throw new Error("Cannot pick from empty array");
     }
+    // Always consume exactly 1 RNG call for predictable testing
     const index = Math.floor(this.rng.random() * array.length);
     return array[index];
   }
@@ -467,7 +468,10 @@ export class WFC extends EventEmitter {
       throw new Error("Cannot pick from empty array");
     }
 
-    // If only one tile, return it directly
+    // Always consume exactly 1 RNG call for predictable testing
+    const randomValue = this.rng.random();
+
+    // If only one tile, consume the RNG value but return the only option
     if (tiles.length === 1) {
       return tiles[0];
     }
@@ -478,19 +482,20 @@ export class WFC extends EventEmitter {
       totalWeight += tile.weight || 1; // Default weight of 1 if not specified
     }
 
-    // Handle edge case where all weights are 0
+    // Handle edge case where all weights are 0 - use consumed random value for uniform selection
     if (totalWeight === 0) {
-      return this.pick(tiles); // Fall back to uniform selection
+      const index = Math.floor(randomValue * tiles.length);
+      return tiles[index];
     }
 
-    // Generate random number between 0 and totalWeight
-    const randomValue = this.rng.random() * totalWeight;
+    // Use the consumed random value for weighted selection
+    const weightedRandomValue = randomValue * totalWeight;
 
     // Find the tile corresponding to this random value
     let currentWeight = 0;
     for (const tile of tiles) {
       currentWeight += tile.weight || 1;
-      if (randomValue <= currentWeight) {
+      if (weightedRandomValue <= currentWeight) {
         return tile;
       }
     }

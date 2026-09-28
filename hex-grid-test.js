@@ -4,7 +4,7 @@
 // Grid parameters
 let hexSize = 40;  // Radius from center to vertex
 let gridRadius = 12; // How many hexagons from center
-let debug = true;
+let debug = false;
 
 // Colors
 let hexFillColor;
@@ -18,9 +18,12 @@ let chunkSize = 10;
 
 let tiles;
 let colors = {
-    'A': 'yellow',
-    'B': 'green',
-    'C': 'lightblue',
+    // 'A': 'yellow',
+    // 'B': 'green',
+    // 'C': 'lightblue',
+    'A': '#FFFFFF',
+    'B': '#D9D9D9',
+    'C': '#A0A0A0',
 }
 
 let generateAdjacencies = (types) => {
