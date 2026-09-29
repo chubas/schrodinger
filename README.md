@@ -13,8 +13,8 @@ A flexible, engine-agnostic implementation of the Wave Function Collapse (WFC) a
   - Automatic tile variation generation (rotation, reflection)
   - Complex adjacency rules support (multi-adjacency, tile transformations)
 - **Robust Error Handling**:
-  - Configurable backtracking system
-  - Multiple backtracking strategies (single step, multi-step)
+  - Depth-first backtracking: finds a solution whenever one exists
+  - Configurable backtrack budget, with "gave up" reported separately from a proven "no solution"
 - **Interactive Processing**:
   - Event-based system for state changes
   - Real-time debugging and visualization support
@@ -66,8 +66,7 @@ const wfc = new WFC(tiles, grid);
 
 // Optional: Configure WFC options
 const options = {
-  maxRetries: 100,        // Maximum retries before giving up
-  backtrackStep: 1,       // How many steps to backtrack
+  maxRetries: 10000,      // Maximum backtracks before giving up (default 10,000)
   logLevel: LogLevel.INFO // Logging verbosity
 };
 
@@ -250,19 +249,23 @@ wfc.start();
 
 ## Error Handling
 
-The WFC implementation includes robust error handling and backtracking:
+On a contradiction, the engine backtracks depth-first: it undoes the last decision, rules that tile out for that cell, and keeps going, undoing earlier decisions if needed. This always terminates and finds a solution whenever one exists. The search is limited by `maxRetries` (maximum number of backtracks, default 10,000), and the two ways it can fail are reported differently:
 
 ```typescript
 try {
   wfc.start();
 } catch (error) {
-  if (error.message.includes('uncollapsable')) {
-    console.error('No valid solution exists for this configuration');
+  if (error.message.startsWith('No solution exists')) {
+    // Proven: no assignment satisfies the constraints (for this grid and initial seed)
+  } else if (error.message.startsWith('Gave up')) {
+    // The backtrack budget ran out; a solution may still exist (raise maxRetries)
   } else {
     console.error('Unexpected error:', error);
   }
 }
 ```
+
+Failures are also emitted as an `error` event before being thrown.
 
 ## Contributing
 

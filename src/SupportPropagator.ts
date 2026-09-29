@@ -21,8 +21,8 @@ import { AdjacencyTables } from "./AdjacencyTables.js";
  *
  * Every removal and every collapse is recorded on a trail (undo log). A
  * snapshot is just the trail length (mark()), and restore(marker) undoes
- * entries back to it. Restores must follow stack discipline: only markers
- * taken on the current path, which the backtrack tree guarantees.
+ * entries back to it. Restores must follow stack discipline (only markers
+ * taken on the current path), which the engine's decision stack guarantees.
  *
  * Cell objects (choices / collapsed / value) are the public view; they are
  * brought up to date at the end of load(), propagate() and restore().
@@ -43,6 +43,10 @@ export class SupportPropagator {
 
   private readonly domain: Uint8Array;
   private readonly size: Int32Array;
+  // Mirrors cell.collapsed, so completion and cell selection don't have to
+  // walk the grid's Cell objects.
+  private readonly collapsed: Uint8Array;
+  private collapsedCount = 0;
   private readonly support: Uint16Array | Uint32Array;
 
   // Each (cell, tile) is removed at most once between loads, so C·T bounds the queue.
@@ -110,6 +114,7 @@ export class SupportPropagator {
 
     this.domain = new Uint8Array(C * T);
     this.size = new Int32Array(C);
+    this.collapsed = new Uint8Array(C);
     this.support = T <= 0xffff ? new Uint16Array(C * T * D) : new Uint32Array(C * T * D);
     this.queue = new Int32Array(C * T);
     this.dirty = new Int32Array(C);
@@ -132,7 +137,10 @@ export class SupportPropagator {
     this.trailLength = 0;
     this.contradiction = false;
 
+    this.collapsedCount = 0;
     for (let c = 0; c < this.cellCount; c++) {
+      this.collapsed[c] = this.cells[c].collapsed ? 1 : 0;
+      this.collapsedCount += this.collapsed[c];
       for (const tile of this.cells[c].choices) {
         const t = this.tileIndexByName.get(tile.name);
         if (t === undefined || this.domain[c * T + t]) continue;
@@ -178,6 +186,35 @@ export class SupportPropagator {
     this.markCollapsed(c, this.tileDefs[t]);
   }
 
+  /**
+   * Rules a single tile out of a cell (e.g. a choice that led to a
+   * contradiction). Call propagate() afterwards.
+   */
+  exclude(cell: Cell, tile: TileDef): void {
+    const t = this.tileIndexByName.get(tile.name);
+    if (t !== undefined) this.remove(this.indexOf(cell), t);
+  }
+
+  isComplete(): boolean {
+    return this.collapsedCount === this.cellCount;
+  }
+
+  /**
+   * Uncollapsed cells with the fewest remaining tiles, in grid iteration
+   * order (the order callers rely on to pick among ties).
+   */
+  lowestEntropyCells(): Cell[] {
+    let min = Infinity;
+    for (let c = 0; c < this.cellCount; c++) {
+      if (!this.collapsed[c] && this.size[c] < min) min = this.size[c];
+    }
+    const candidates: Cell[] = [];
+    for (let c = 0; c < this.cellCount; c++) {
+      if (!this.collapsed[c] && this.size[c] === min) candidates.push(this.cells[c]);
+    }
+    return candidates;
+  }
+
   /** Current trail position; pass it to restore() to return to this state. */
   mark(): number {
     return this.trailLength;
@@ -205,6 +242,8 @@ export class SupportPropagator {
         const c = -entry - 1;
         this.cells[c].collapsed = false;
         this.cells[c].value = undefined;
+        this.collapsed[c] = 0;
+        this.collapsedCount--;
         this.markDirty(c);
         continue;
       }
@@ -270,6 +309,17 @@ export class SupportPropagator {
     const D = this.maxDirections;
     if (this.queueLength !== 0) return `removal queue not drained (${this.queueLength} left)`;
 
+    let collapsedCount = 0;
+    for (let c = 0; c < this.cellCount; c++) {
+      if (this.collapsed[c] !== (this.cells[c].collapsed ? 1 : 0)) {
+        return `cell ${c}: collapsed flag ${this.collapsed[c]} doesn't mirror cell.collapsed=${this.cells[c].collapsed}`;
+      }
+      collapsedCount += this.collapsed[c];
+    }
+    if (collapsedCount !== this.collapsedCount) {
+      return `collapsed count ${this.collapsedCount} but ${collapsedCount} cells are collapsed`;
+    }
+
     for (let c = 0; c < this.cellCount; c++) {
       let count = 0;
       for (let t = 0; t < T; t++) count += this.domain[c * T + t];
@@ -313,6 +363,8 @@ export class SupportPropagator {
     const cell = this.cells[c];
     cell.collapsed = true;
     cell.value = tile;
+    this.collapsed[c] = 1;
+    this.collapsedCount++;
     this.trail[this.trailLength++] = -(c + 1);
     this.markDirty(c);
   }
@@ -350,6 +402,8 @@ export class SupportPropagator {
       if (autoCollapse && !cell.collapsed && choices.length === 1) {
         cell.collapsed = true;
         cell.value = choices[0];
+        this.collapsed[c] = 1;
+        this.collapsedCount++;
         this.trail[this.trailLength++] = -(c + 1);
       }
     }

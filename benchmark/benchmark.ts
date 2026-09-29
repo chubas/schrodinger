@@ -182,8 +182,6 @@ async function runBenchmark(): Promise<boolean> {
     // Create WFC instance
     const wfc = new WFC(tileDefs, grid, {
       logLevel: verbose ? LogLevel.DEBUG : LogLevel.NONE,
-      maxRetries: 5,
-      backtrackStep: 3
     });
 
     // Track metrics

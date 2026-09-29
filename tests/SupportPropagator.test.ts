@@ -3,7 +3,7 @@ import { Cell, Grid, GridSnapshot, SquareGrid } from "../src/Grid.js";
 import { TileDef } from "../src/TileDef.js";
 import { AdjacencyTables } from "../src/AdjacencyTables.js";
 import { SupportPropagator } from "../src/SupportPropagator.js";
-import { WFC, LogLevel, BACKTRACK_STRATEGIES } from "../src/WFC.js";
+import { WFC, LogLevel } from "../src/WFC.js";
 import { generateRandomTiles } from "../stress-test/randomTiles.js";
 
 const tile = (name: string, adjacencies: string[]): TileDef => ({ name, adjacencies, draw: () => {} });
@@ -224,7 +224,6 @@ describe("WFC with debugChecks", () => {
         const rng = seedrandom(String(seed));
         const wfc = new WFC(tiles, grid, {
           random: { random: () => rng(), setSeed: () => {} },
-          backtrackStrategy: BACKTRACK_STRATEGIES.deep,
           logLevel: LogLevel.NONE,
           debugChecks: true,
         });
@@ -234,7 +233,7 @@ describe("WFC with debugChecks", () => {
         try {
           wfc.start();
         } catch (e) {
-          expect((e as Error).message).toMatch(/^No solution exists/);
+          expect((e as Error).message).toMatch(/^(No solution exists|Gave up)/);
           continue;
         }
 

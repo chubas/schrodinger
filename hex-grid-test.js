@@ -132,7 +132,6 @@ function setup() {
     let grid = new CubicHexagonalGrid(gridRadius);
 
     wfc = new Schrodinger.WFC(tiles, grid, {
-        maxRetries: 10,
         // logLevel: Schrodinger.LogLevel.DEBUG, // Enable DEBUG logging to see exhaustion checks
     });
     wfcGenerator = wfc.execute();

@@ -354,7 +354,6 @@ function setup() {
     // Initialize WFC
     const grid = new Schrodinger.SquareGrid(tileX, tileY);
     wfc = new Schrodinger.WFC(TILES, grid, {
-      maxRetries: 10,
       logLevel: Schrodinger.LogLevel.DEBUG, // Enable DEBUG logging to see exhaustion checks
       random: rng
     });
@@ -581,7 +580,6 @@ function keyPressed() {
         // Clear the canvas and create a new WFC
         const grid = new Schrodinger.SquareGrid(tileX, tileY);
         wfc = new Schrodinger.WFC(TILES, grid, {
-          maxRetries: 10,
           // logLevel: Schrodinger.LogLevel.INFO
         });
 
@@ -611,7 +609,6 @@ function keyPressed() {
       let seed = floor(random(1000000));
       rng.setSeed(seed);
       wfc = new Schrodinger.WFC(TILES, grid, {
-        maxRetries: 10,
         // logLevel: Schrodinger.LogLevel.DEBUG, // Enable DEBUG logging to see exhaustion checks
         random: rng
       });
@@ -669,7 +666,6 @@ function keyPressed() {
       try {
         const grid = new Schrodinger.SquareGrid(tileX, tileY);
         wfc = new Schrodinger.WFC(TILES, grid, {
-          maxRetries: 10,
           // logLevel: Schrodinger.LogLevel.DEBUG
         });
 

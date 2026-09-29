@@ -17,15 +17,11 @@ RANDOM_A="--tileset random --random-tiles 32 --random-labels 6 --width 10 --heig
 RANDOM_B="--tileset random --random-tiles 32 --random-labels 8 --width 10 --height 10"
 
 CONFIGS=(
-  "iso-10x15-conservative|--runs 1000"
-  "iso-10x15-aggressive|--runs 300 --strategy aggressive"
-  "iso-10x15-deep|--runs 300 --strategy deep"
-  "iso-20x30-conservative|--runs 50 --width 20 --height 30"
-  "random-a-conservative|$RANDOM_A --runs 1000"
-  "random-a-aggressive|$RANDOM_A --runs 1000 --strategy aggressive"
-  "random-a-deep|$RANDOM_A --runs 1000 --strategy deep"
-  "random-b-conservative|$RANDOM_B --runs 1000"
-  "random-b-deep|$RANDOM_B --runs 1000 --strategy deep"
+  "iso-10x15|--runs 1000"
+  "iso-20x30|--runs 50 --width 20 --height 30"
+  "random-a|$RANDOM_A --runs 1000"
+  "random-b|$RANDOM_B --runs 1000"
+  "random-a-6x6-checked|--tileset random --random-tiles 32 --random-labels 6 --width 6 --height 6 --runs 200 --check-invariants"
 )
 
 if [[ "$MODE" != "record" && "$MODE" != "compare" ]]; then

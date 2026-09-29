@@ -18,7 +18,7 @@ import { createHash } from "crypto";
 import { performance } from "perf_hooks";
 import seedrandom from "seedrandom";
 
-import { WFC, LogLevel, BACKTRACK_STRATEGIES, StepResult } from "../src/WFC.js";
+import { WFC, LogLevel, StepResult } from "../src/WFC.js";
 import { SquareGrid } from "../src/Grid.js";
 import { TileDef } from "../src/TileDef.js";
 import { RandomLib } from "../src/RandomLib.js";
@@ -26,7 +26,6 @@ import { AdjacencyPrecomputer, PrecomputedAdjacencies } from "../src/Precomputed
 import { generateIsoTiles } from "./isoTiles.js";
 import { generateRandomTiles } from "./randomTiles.js";
 
-type StrategyName = keyof typeof BACKTRACK_STRATEGIES;
 type TilesetName = "iso" | "random";
 
 interface Options {
@@ -35,8 +34,7 @@ interface Options {
   seed?: number;
   width: number;
   height: number;
-  strategy: StrategyName;
-  maxRetries: number;
+  maxRetries?: number;
   tileset: TilesetName;
   randomTiles: number;
   randomLabels: number;
@@ -70,7 +68,6 @@ interface RunResult {
   backtrackDepths: number[];
   backtrackSizes: number[];
   avgEntropy: number;
-  suspectedSnapshotBug: boolean;
   consoleErrors: string[];
   consoleWarns: string[];
 }
@@ -80,7 +77,6 @@ const COMPARABLE_KEYS: (keyof Options)[] = [
   "tileset",
   "width",
   "height",
-  "strategy",
   "randomTiles",
   "randomLabels",
   "tilesetSeed",
@@ -122,8 +118,7 @@ Options:
   --seed <n>             Run exactly one specific seed (overrides --runs/--start-seed)
   --width <n>            Grid width in tiles (default: 10, matches iso.js)
   --height <n>           Grid height in tiles (default: 15, matches iso.js)
-  --strategy <name>      Backtrack strategy: conservative | aggressive | deep (default: conservative)
-  --max-retries <n>      Passed through as WFCOptions.maxRetries (default: 10)
+  --max-retries <n>      Backtrack budget, WFCOptions.maxRetries (default: the engine default)
   --tileset <name>       iso (the iso.js tileset, default) | random (seeded edge-label tileset)
   --random-tiles <n>     Tile count for --tileset random (default: 24)
   --random-labels <n>    Distinct edge labels for --tileset random (default: 4)
@@ -162,8 +157,6 @@ function parseArgs(): Options {
     startSeed: 1,
     width: 10,
     height: 15,
-    strategy: "conservative",
-    maxRetries: 10,
     tileset: "iso",
     randomTiles: 24,
     randomLabels: 4,
@@ -195,9 +188,6 @@ function parseArgs(): Options {
         break;
       case "--height":
         opts.height = parseInt(args[++i], 10);
-        break;
-      case "--strategy":
-        opts.strategy = args[++i] as StrategyName;
         break;
       case "--max-retries":
         opts.maxRetries = parseInt(args[++i], 10);
@@ -252,10 +242,6 @@ function parseArgs(): Options {
     }
   }
 
-  if (!BACKTRACK_STRATEGIES[opts.strategy]) {
-    console.error(`Unknown strategy "${opts.strategy}". Valid: ${Object.keys(BACKTRACK_STRATEGIES).join(", ")}`);
-    process.exit(1);
-  }
   if (opts.tileset !== "iso" && opts.tileset !== "random") {
     console.error(`Unknown tileset "${opts.tileset}". Valid: iso, random`);
     process.exit(1);
@@ -337,12 +323,10 @@ function traceEntry(step: StepResult): string {
 function runOnce(seed: number, tiles: TileDef[], precomputed: PrecomputedAdjacencies, opts: Options): RunResult {
   const grid = new SquareGrid(opts.width, opts.height);
   const rng = new SeedRandom(seed);
-  const strategy = BACKTRACK_STRATEGIES[opts.strategy];
 
   const wfc = new WFC(tiles, grid, {
     random: rng,
     maxRetries: opts.maxRetries,
-    backtrackStrategy: strategy,
     logLevel: opts.verbose ? LogLevel.DEBUG : LogLevel.NONE,
     debugChecks: opts.checkInvariants,
   });
@@ -357,10 +341,8 @@ function runOnce(seed: number, tiles: TileDef[], precomputed: PrecomputedAdjacen
   let success = false;
   let error: string | undefined;
 
-  // The engine's SnapshotManager logs restoration failures directly via
-  // console.error/warn regardless of logLevel - that's our best signal for
-  // "backtrack didn't behave as expected" bugs (e.g. trying to restore a
-  // snapshot that was never created). Capture it per run.
+  // Anything the engine writes to console.error/warn is unexpected; capture
+  // it per run so it shows up in the results file.
   const consoleErrors: string[] = [];
   const consoleWarns: string[] = [];
   const originalError = console.error;
@@ -434,7 +416,6 @@ function runOnce(seed: number, tiles: TileDef[], precomputed: PrecomputedAdjacen
   const avgEntropy = entropySamples.length
     ? entropySamples.reduce((a, b) => a + b, 0) / entropySamples.length
     : 0;
-  const suspectedSnapshotBug = consoleErrors.some((m) => /Snapshot .* not found/.test(m));
 
   return {
     seed,
@@ -450,7 +431,6 @@ function runOnce(seed: number, tiles: TileDef[], precomputed: PrecomputedAdjacen
     backtrackDepths,
     backtrackSizes,
     avgEntropy,
-    suspectedSnapshotBug,
     consoleErrors: Array.from(new Set(consoleErrors)),
     consoleWarns: Array.from(new Set(consoleWarns)),
   };
@@ -479,13 +459,17 @@ function printSummary(results: RunResult[], overallDurationMs: number, opts: Opt
   const successes = results.filter((r) => r.success);
   const failures = results.filter((r) => !r.success);
   const invalid = results.filter((r) => r.valid === false);
-  const bugHits = results.filter((r) => r.suspectedSnapshotBug);
 
   console.log("\n========== Stress Test Summary ==========");
   console.log(
-    `Tileset: ${opts.tileset}  Grid: ${opts.width}x${opts.height}  Strategy: ${opts.strategy}  MaxRetries option: ${opts.maxRetries}`,
+    `Tileset: ${opts.tileset}  Grid: ${opts.width}x${opts.height}  Backtrack budget: ${opts.maxRetries ?? "engine default"}`,
   );
   console.log(`Runs: ${n}  Success: ${successes.length} (${((successes.length / n) * 100).toFixed(1)}%)  Failures: ${failures.length}`);
+  const provenUnsolvable = failures.filter((r) => r.error?.startsWith("No solution exists")).length;
+  const gaveUp = failures.filter((r) => r.error?.startsWith("Gave up")).length;
+  console.log(
+    `Failure causes: no solution (proven) ${provenUnsolvable}, gave up ${gaveUp}, other ${failures.length - provenUnsolvable - gaveUp}`,
+  );
   console.log(`Invalid solutions: ${invalid.length}`);
   console.log(`Total time: ${(overallDurationMs / 1000).toFixed(2)}s  Avg/run: ${(overallDurationMs / n).toFixed(2)}ms`);
   console.log(`Avg collapses/run: ${avg(results.map((r) => r.collapses)).toFixed(2)}`);
@@ -524,22 +508,14 @@ function printSummary(results: RunResult[], overallDurationMs: number, opts: Opt
   if (failures.length) {
     console.log(`\nFailing seeds (${failures.length}):`);
     for (const r of failures.slice(0, 50)) {
-      console.log(`  seed=${r.seed}  error="${r.error}"  suspectedSnapshotBug=${r.suspectedSnapshotBug}  backtracks=${r.backtracks}`);
+      console.log(`  seed=${r.seed}  error="${r.error}"  backtracks=${r.backtracks}`);
     }
     if (failures.length > 50) {
       console.log(`  ... and ${failures.length - 50} more (see output file)`);
     }
     console.log("\nReproduce a failing seed with full debug logging:");
     console.log(
-      `  npm run stress-test -- --seed ${failures[0].seed} ${tilesetArgs(opts)} --width ${opts.width} --height ${opts.height} --strategy ${opts.strategy} --verbose`,
-    );
-  }
-
-  if (bugHits.length) {
-    console.log(
-      `\nWARNING: ${bugHits.length} run(s) hit a "Snapshot not found" restoration failure inside the backtracking system ` +
-        `(seeds: ${bugHits.slice(0, 20).map((r) => r.seed).join(", ")}${bugHits.length > 20 ? ", ..." : ""}). ` +
-        "This means the backtrack tree offered an ancestor node with no matching snapshot (e.g. the root) as viable - a likely root cause for the 'backtrack behaved unexpectedly' reports.",
+      `  npm run stress-test -- --seed ${failures[0].seed} ${tilesetArgs(opts)} --width ${opts.width} --height ${opts.height} --verbose`,
     );
   }
 
@@ -576,6 +552,15 @@ function compareWithBaseline(results: RunResult[], opts: Options): number {
   const compared = results.length - missing;
   console.log(
     `Compare vs ${file}: ${compared - mismatches.length}/${compared} identical, ${mismatches.length} mismatched, ${missing} not in baseline`,
+  );
+  // Seeds that succeeded in the baseline without a single backtrack never hit
+  // a contradiction, so they don't depend on how backtracking works and
+  // should match even across backtracking changes.
+  const untouched = (r?: RunResult) => r !== undefined && r.success && r.backtracks === 0;
+  const clean = results.filter((r) => untouched(bySeed.get(r.seed)));
+  const cleanMismatches = mismatches.filter(({ expected }) => untouched(expected)).length;
+  console.log(
+    `  of which baseline seeds solved without backtracking: ${clean.length - cleanMismatches}/${clean.length} identical`,
   );
   for (const { current, expected } of mismatches.slice(0, 10)) {
     console.log(
@@ -641,8 +626,7 @@ function main(): void {
         `[${i + 1}/${seeds.length}] seed=${seed} ${result.success ? "OK" : "FAIL"} ` +
           `collapses=${result.collapses} backtracks=${result.backtracks}` +
           (result.error ? ` error="${result.error}"` : "") +
-          (result.valid === false ? ` INVALID: ${result.validationError}` : "") +
-          (result.suspectedSnapshotBug ? " (snapshot-restore bug)" : ""),
+          (result.valid === false ? ` INVALID: ${result.validationError}` : ""),
       );
     }
 

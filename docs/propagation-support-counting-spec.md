@@ -183,9 +183,23 @@ These are on top of the field/lookup fixes already in `8d00674`, which were wort
 - Multi-cell initial seeds are validated against each other. An invalid seed now fails immediately with "Initial seed creates an impossible state"; previously that test timed out.
 - D1: tiles with no compatible tile in some neighboring direction are removed before the first collapse.
 
-**Open items (not changed here):**
+**Open items:**
 
 - ~~`tests/Backtracking.test.ts` failures~~ Resolved after this work: failures before the main loop (contradictory constraints at load, invalid initial seed) now emit `error` before throwing, like failures inside it; and the backtracking test uses a scenario that needs a backtrack on a later collapse (random tileset, seed 21).
-- D2: the root-snapshot restore ("Snapshot -1 not found") is unchanged. With the trail it becomes "restore to marker 0".
-- `LogLevel.NONE` is ignored (`options.logLevel || LogLevel.WARN` treats `0` as unset).
-- Next performance step: an entropy bucket/heap plus a collapsed-cell counter to remove the O(C) per-step scans.
+- ~~D2: root-snapshot restore~~ Resolved by replacing backtracking entirely (see §13).
+- ~~`LogLevel.NONE` is ignored~~ Fixed (`??` instead of `||`).
+- ~~O(C) per-step scans through the grid's `iterate()`~~ Cell selection and the completion check now read the propagator's typed arrays and a collapsed-cell counter (1.2× at 10×15, 3.1× at 80×80). Selection is still O(C) per step; an entropy bucket/heap would only matter for much larger grids.
+
+## 13. Depth-first backtracking
+
+Making the backtrack tree's root restorable wasn't enough on its own: nothing ever marked the root exhausted, so an instance where every first choice fails looped forever. Separately, "No solution exists" was often false: in the random-tileset baselines every seed runs the same (solvable) problem, yet most seeds reported no solution.
+
+`BacktrackTree`, `ExhaustionTracker` and `SnapshotManager` were replaced by a decision stack on the trail. Each decision records the trail position from before it. On a contradiction: undo the last decision, exclude its tile from that cell, propagate; if that also fails, undo the previous decision and exclude its tile, and so on. An empty stack proves there is no solution (for this grid and initial seed). The initial seed is never undone.
+
+- `maxRetries` is now the backtrack budget (default 10,000). Exceeding it throws "Gave up after N backtracks ...", distinct from the proven "No solution exists ...". Both are emitted as `error` before being thrown.
+- `backtrackStrategy`, `backtrackStep` and `BACKTRACK_STRATEGIES` are deprecated and ignored.
+- `backtrack` events and step results now carry the decision that was undone (`group`), and `depth` is how many decisions the current backtrack has undone.
+
+Verification: seeds solved without backtracking in the old baselines are identical (1,466/1,466). Success rates on the known-solvable configurations went from 8.6% to 99.9% (`random-a`), 16.5% to 100% (`random-b`) and 92% to 94% (iso 20×30); every remaining failure is "gave up", none falsely claims no solution. New tests compare the engine against brute force on 32 small instances (21 solvable, 11 not) with debug checks on, and cover the odd-cycle case that used to hang, the budget, and multi-level backtracking. Baselines were re-recorded for the new behavior (old ones kept under `stress-test/baselines/pre-dfs/`, gitignored).
+
+Possible later improvements, deliberately not done yet: per-level retry limits, restarts, backjumping (see the discussion that led to this section).

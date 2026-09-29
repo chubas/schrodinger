@@ -260,7 +260,6 @@ function generateWFCPattern() {
   try {
     const grid = new Schrodinger.SquareGrid(tileX, tileY);
     wfc = new Schrodinger.WFC(TILES, grid, {
-      maxRetries: 10,
       logLevel: Schrodinger.LogLevel.WARN,
       random: rng
     });

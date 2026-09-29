@@ -15,10 +15,14 @@ export enum LogLevel {
 }
 
 export type WFCOptions = {
+  // Maximum number of backtracks before giving up (default 10,000). Giving
+  // up is reported differently from a proven "No solution exists".
   maxRetries?: number;
+  /** @deprecated Ignored; backtracking is a depth-first search limited by maxRetries. */
   backtrackStep?: number;
   random?: RandomLib;
   logLevel?: LogLevel;
+  /** @deprecated Ignored; backtracking is a depth-first search limited by maxRetries. */
   backtrackStrategy?: BacktrackStrategy;
   // Recompute propagation state from scratch after every propagation and
   // restore, throwing on any mismatch with the incremental state. Slow;
@@ -52,26 +56,7 @@ export type WFCEvents = {
   snapshot: (id: number) => void;
 };
 
-// New hierarchical backtracking types
-export type CellCoords = [number, number];
-export type TileId = string;
-
-export interface BacktrackNode {
-  id: number;
-  snapshotId: number;
-  parent?: BacktrackNode;
-  children: BacktrackNode[];
-  
-  // Decision context
-  targetCells: CellCoords[];
-  triedChoices: Map<string, Set<TileId>>;
-  
-  // Metadata
-  depth: number;
-  createdAt: number;
-  isExhausted: boolean;
-}
-
+/** @deprecated Ignored; backtracking is a depth-first search limited by WFCOptions.maxRetries. */
 export interface BacktrackStrategy {
   name: string;
   maxLevels: number;
@@ -79,6 +64,7 @@ export interface BacktrackStrategy {
   cleanupFrequency: number;
 }
 
+/** @deprecated Ignored; backtracking is a depth-first search limited by WFCOptions.maxRetries. */
 export const BACKTRACK_STRATEGIES = {
   conservative: { name: 'conservative', maxLevels: 1, exhaustionPolicy: 'immediate' as const, cleanupFrequency: 100 },
   aggressive: { name: 'aggressive', maxLevels: 5, exhaustionPolicy: 'deferred' as const, cleanupFrequency: 50 },
@@ -87,220 +73,29 @@ export const BACKTRACK_STRATEGIES = {
 
 export type StepResult = {
   type: "collapse" | "backtrack" | "complete";
+  // For "backtrack": the decision (cell and tile) that was undone and ruled out.
   group?: CollapseGroup;
   affectedCells?: Cell[];
+  // For "backtrack": how many decisions this backtrack has undone so far.
   depth?: number;
 };
 
-// A snapshot is a position on the SupportPropagator's trail (undo log).
-interface TrailSnapshot {
-  id: number;
+const DEFAULT_MAX_BACKTRACKS = 10_000;
+
+const NO_SOLUTION_MESSAGE = "No solution exists - all possibilities exhausted";
+
+// A tile chosen for a cell, and the trail position from just before it was
+// applied (so it can be undone).
+type Decision = {
+  cell: Cell;
+  tile: TileDef;
   marker: number;
-  referenceCount: number;
-  timestamp: number;
-}
-
-// Snapshot Manager - tracks trail-position snapshots with reference counting
-class SnapshotManager {
-  private snapshots = new Map<number, TrailSnapshot>();
-  private counter = 0;
-
-  createSnapshot(marker: number): number {
-    const id = this.counter++;
-    this.snapshots.set(id, { id, marker, referenceCount: 0, timestamp: Date.now() });
-    return id;
-  }
-
-  addReference(id: number): void {
-    const snapshot = this.snapshots.get(id);
-    if (snapshot) {
-      snapshot.referenceCount++;
-    }
-  }
-
-  removeReference(id: number): void {
-    const snapshot = this.snapshots.get(id);
-    if (snapshot) {
-      snapshot.referenceCount--;
-      if (snapshot.referenceCount <= 0) {
-        this.snapshots.delete(id);
-      }
-    }
-  }
-
-  // Returns the trail position to restore to, or undefined if the snapshot
-  // doesn't exist (e.g. the backtrack tree's root, which never has one).
-  getMarker(id: number): number | undefined {
-    const snapshot = this.snapshots.get(id);
-    if (!snapshot) {
-      console.error(`Snapshot ${id} not found`);
-      return undefined;
-    }
-    return snapshot.marker;
-  }
-
-  hasSnapshot(id: number): boolean {
-    return this.snapshots.has(id);
-  }
-
-  getSnapshotCount(): number {
-    return this.snapshots.size;
-  }
-
-  cleanup(olderThan: number): number {
-    let cleaned = 0;
-    for (const [id, snapshot] of this.snapshots.entries()) {
-      if (snapshot.referenceCount <= 0 && snapshot.timestamp < olderThan) {
-        this.snapshots.delete(id);
-        cleaned++;
-      }
-    }
-    return cleaned;
-  }
-}
-
-// Backtrack Tree - manages the hierarchical backtracking structure
-class BacktrackTree {
-  private root: BacktrackNode;
-  private current: BacktrackNode;
-  private nodeCounter = 0;
-
-  constructor() {
-    this.root = {
-      id: this.nodeCounter++,
-      snapshotId: -1, // Root has no snapshot
-      children: [],
-      targetCells: [],
-      triedChoices: new Map(),
-      depth: 0,
-      createdAt: Date.now(),
-      isExhausted: false
-    };
-    this.current = this.root;
-  }
-
-  createChild(targetCells: CellCoords[], snapshotId: number): BacktrackNode {
-    const child: BacktrackNode = {
-      id: this.nodeCounter++,
-      snapshotId,
-      parent: this.current,
-      children: [],
-      targetCells: [...targetCells],
-      triedChoices: new Map(),
-      depth: this.current.depth + 1,
-      createdAt: Date.now(),
-      isExhausted: false
-    };
-
-    this.current.children.push(child);
-    this.current = child;
-    return child;
-  }
-
-  markExhausted(node: BacktrackNode): void {
-    node.isExhausted = true;
-  }
-
-  findViableAncestor(maxLevels: number): BacktrackNode | null {
-    let node = this.current.parent;
-    let levels = 1;
-
-    while (node && levels <= maxLevels) {
-      if (!node.isExhausted) {
-        return node;
-      }
-      node = node.parent;
-      levels++;
-    }
-
-    return null;
-  }
-
-  moveToNode(node: BacktrackNode): void {
-    this.current = node;
-  }
-
-  getCurrentNode(): BacktrackNode {
-    return this.current;
-  }
-
-  getRoot(): BacktrackNode {
-    return this.root;
-  }
-
-  cleanup(keepDepth: number): number {
-    // Prune branches that are too deep or old
-    let pruned = 0;
-    const prune = (node: BacktrackNode): void => {
-      node.children = node.children.filter(child => {
-        if (child.depth > keepDepth || child.isExhausted) {
-          pruned++;
-          return false;
-        }
-        prune(child);
-        return true;
-      });
-    };
-
-    prune(this.root);
-    return pruned;
-  }
-}
-
-// Exhaustion Tracker - precisely tracks what combinations have been tried
-class ExhaustionTracker {
-  private triedCombinations = new Map<string, Set<string>>();
-
-  markTried(cells: CellCoords[], choices: Map<string, TileId>): void {
-    const contextKey = this.getContextKey(cells);
-    const combinationKey = this.getCombinationKey(choices);
-
-    if (!this.triedCombinations.has(contextKey)) {
-      this.triedCombinations.set(contextKey, new Set());
-    }
-    this.triedCombinations.get(contextKey)!.add(combinationKey);
-  }
-
-  isExhausted(cells: CellCoords[], grid: Grid): boolean {
-    const contextKey = this.getContextKey(cells);
-    const tried = this.triedCombinations.get(contextKey) || new Set();
-    const available = this.generateValidCombinations(cells, grid);
-
-    return available.length > 0 && available.every(combo => tried.has(combo));
-  }
-
-  private getContextKey(cells: CellCoords[]): string {
-    return cells.map(c => `${c[0]},${c[1]}`).sort().join('|');
-  }
-
-  private getCombinationKey(choices: Map<string, TileId>): string {
-    const sorted = Array.from(choices.entries()).sort();
-    return sorted.map(([coords, tile]) => `${coords}:${tile}`).join('|');
-  }
-
-  private generateValidCombinations(cells: CellCoords[], grid: Grid): string[] {
-    // For now, return a simple implementation
-    // In a full implementation, this would generate all valid tile combinations
-    const combinations: string[] = [];
-    
-    for (const coords of cells) {
-      const cell = grid.get(coords);
-      if (cell && cell.choices.length > 0) {
-        for (const choice of cell.choices) {
-          const choiceMap = new Map([[`${coords[0]},${coords[1]}`, choice.name]]);
-          combinations.push(this.getCombinationKey(choiceMap));
-        }
-      }
-    }
-
-    return combinations;
-  }
-}
+};
 
 export class WFC extends EventEmitter {
   private readonly tileDefs: TileDef[];
   private readonly options: WFCOptions;
-  private readonly retries: number;
+  private readonly maxBacktracks: number;
   // Plain TS `private` rather than a native `#` field: at this project's
   // ES2020 build target, TypeScript downlevels `#field` into a WeakMap-backed
   // polyfill, and this field is read many times per adjacency check (the
@@ -308,7 +103,6 @@ export class WFC extends EventEmitter {
   // accounting for ~38% of total runtime.
   private grid: Grid;
   private readonly rng: RandomLib;
-  private readonly collapseQueue: CollapseGroup[] = [];
   private readonly logLevel: LogLevel;
   private precomputedAdjacencies?: PrecomputedAdjacencies;
   private readonly tileIndexByName: Map<string, number> = new Map();
@@ -319,28 +113,15 @@ export class WFC extends EventEmitter {
   // grid's Cell objects mirror.
   private propagator?: SupportPropagator;
 
-  // New hierarchical backtracking system
-  private snapshots: SnapshotManager;
-  private backtrackTree: BacktrackTree;
-  private exhaustionTracker: ExhaustionTracker;
-  private strategy: BacktrackStrategy;
-  private stepCounter = 0;
-
   constructor(tileDefs: TileDef[], grid: Grid, options: WFCOptions = {}) {
     super();
     this.tileDefs = tileDefs;
     this.grid = grid;
     tileDefs.forEach((tileDef, index) => this.tileIndexByName.set(tileDef.name, index));
     this.options = options;
-    this.retries = options.maxRetries || 10;
+    this.maxBacktracks = options.maxRetries ?? DEFAULT_MAX_BACKTRACKS;
     this.rng = options.random || new DefaultRandom();
-    this.logLevel = options.logLevel || LogLevel.WARN;
-    this.strategy = options.backtrackStrategy || BACKTRACK_STRATEGIES.conservative;
-
-    // Initialize new systems
-    this.snapshots = new SnapshotManager();
-    this.backtrackTree = new BacktrackTree();
-    this.exhaustionTracker = new ExhaustionTracker();
+    this.logLevel = options.logLevel ?? LogLevel.WARN;
 
     this.validateTileDefs(tileDefs);
     this.initializeGrid();
@@ -429,6 +210,7 @@ export class WFC extends EventEmitter {
   }
 
   get completed(): boolean {
+    if (this.propagator) return this.propagator.isComplete();
     for (const [cell] of this.grid.iterate()) {
       if (!cell.collapsed) {
         return false;
@@ -457,57 +239,76 @@ export class WFC extends EventEmitter {
       throw this.failure("No solution exists - the tile constraints are contradictory on this grid", emitEvents);
     }
 
-    // Handle initial seed if provided
+    // The initial seed is applied before any decision, so it is never undone:
+    // if it can't be satisfied, there is nothing to backtrack to.
     if (initialSeed && initialSeed.length > 0) {
       this.log(LogLevel.DEBUG, "Processing initial seed");
-      const group: CollapseGroup = {
-        cells: initialSeed,
-        cause: "initial"
-      };
-      
-      const result = yield* this.attemptCollapse(group, emitEvents);
-      if (!result.success) {
+      const seeded = this.applySeed(initialSeed);
+      if (!seeded) {
         throw this.failure("Initial seed creates an impossible state", emitEvents);
       }
+      const group: CollapseGroup = { cells: seeded, cause: "initial" };
+      if (emitEvents) this.emit("collapse", group);
+      yield { type: "collapse", group, affectedCells: seeded.map((c) => this.grid.get(c.coords)!) };
     }
 
-    // Main execution loop
-    while (!this.completed) {
-      try {
-        // Select cells to collapse based on entropy
-        const targetCells = this.selectCellsToCollapse();
-        if (targetCells.length === 0) {
-          this.log(LogLevel.INFO, "WFC completed successfully");
-          if (emitEvents) this.emit("complete");
-          yield { type: "complete" };
-          return;
+    const propagator = this.activePropagator();
+    const decisions: Decision[] = [];
+    let backtracks = 0;
+
+    try {
+      while (!propagator.isComplete()) {
+        const cell = this.pick(propagator.lowestEntropyCells());
+        const tile = this.pickWeighted(cell.choices);
+        const marker = propagator.mark();
+
+        propagator.collapse(cell, tile);
+        const consistent = propagator.propagate();
+        this.checkPropagator();
+
+        if (consistent) {
+          decisions.push({ cell, tile, marker });
+          const group: CollapseGroup = { cells: [{ coords: cell.coords, value: tile }], cause: "entropy" };
+          if (emitEvents) this.emit("collapse", group);
+          yield { type: "collapse", group, affectedCells: [cell] };
+          continue;
         }
 
-        const group: CollapseGroup = {
-          cells: targetCells.map(coords => ({ coords })),
-          cause: "entropy"
-        };
-
-        const result = yield* this.attemptCollapse(group, emitEvents);
-        if (!result.success) {
-          // Failed - try backtracking
-          const backtrackResult = yield* this.handleBacktrack(emitEvents);
-          if (!backtrackResult) {
-            throw new Error("No solution exists - all possibilities exhausted");
+        // Depth-first backtracking: undo the failed decision and rule its
+        // tile out for that cell. If that also leads to a contradiction, the
+        // previous decision was wrong too: undo it and rule out its tile, and
+        // so on. Running out of decisions proves there is no solution.
+        let failed: Decision = { cell, tile, marker };
+        for (let depth = 1; ; depth++) {
+          if (++backtracks > this.maxBacktracks) {
+            throw new Error(
+              `Gave up after ${this.maxBacktracks} backtracks without finding a solution (raise maxRetries to search longer)`,
+            );
           }
-        }
 
-        // Periodic cleanup
-        this.stepCounter++;
-        if (this.stepCounter % this.strategy.cleanupFrequency === 0) {
-          this.performCleanup();
-        }
+          propagator.restore(failed.marker);
+          propagator.exclude(failed.cell, failed.tile);
+          const recovered = propagator.propagate();
+          this.checkPropagator();
 
-      } catch (error) {
-        this.log(LogLevel.ERROR, "WFC execution failed:", error);
-        if (emitEvents) this.emit("error", error);
-        throw error;
+          this.log(LogLevel.DEBUG, `Backtrack: ruled out ${failed.tile.name} at ${failed.cell.coords}`);
+          const group: CollapseGroup = {
+            cells: [{ coords: failed.cell.coords, value: failed.tile }],
+            cause: "entropy",
+          };
+          if (emitEvents) this.emit("backtrack", group);
+          yield { type: "backtrack", group, depth };
+
+          if (recovered) break;
+          const previous = decisions.pop();
+          if (!previous) throw new Error(NO_SOLUTION_MESSAGE);
+          failed = previous;
+        }
       }
+    } catch (error) {
+      this.log(LogLevel.ERROR, "WFC execution failed:", error);
+      if (emitEvents) this.emit("error", error);
+      throw error;
     }
 
     this.log(LogLevel.INFO, "WFC completed successfully");
@@ -515,229 +316,22 @@ export class WFC extends EventEmitter {
     yield { type: "complete" };
   }
 
-  private *attemptCollapse(group: CollapseGroup, emitEvents: boolean = true): Generator<StepResult, CollapseResult, unknown> {
-    const snapshotId = this.snapshots.createSnapshot(this.activePropagator().mark());
-    this.snapshots.addReference(snapshotId);
-    
-    // Create backtrack node
-    const targetCells: CellCoords[] = group.cells.map(c => c.coords);
-    const node = this.backtrackTree.createChild(targetCells, snapshotId);
-
-    // Get untried choices for this node
-    const availableChoices = this.getUntriedChoices(node);
-    if (availableChoices.size === 0) {
-      this.log(LogLevel.DEBUG, `No untried choices for node ${node.id}`);
-      this.backtrackTree.markExhausted(node);
-      // Remove reference since we're failing
-      this.snapshots.removeReference(snapshotId);
-      return { success: false, affectedCells: [] };
-    }
-
-    // Select choices for collapse
-    const selectedChoices = this.selectChoices(group.cells, availableChoices);
-    
-    // Mark these choices as tried
-    this.exhaustionTracker.markTried(targetCells, selectedChoices);
-    this.updateTriedChoices(node, selectedChoices);
-
-    // Attempt the actual collapse
-    const result = this.collapseWithChoices(group.cells, selectedChoices);
-    
-    if (result.success) {
-      this.log(LogLevel.DEBUG, `Collapsed ${group.cells.length} cells at depth ${node.depth}`);
-      
-      // Update the group with actual values from the grid for the event
-      const groupWithValues: CollapseGroup = {
-        ...group,
-        cells: group.cells.map(cellCollapse => {
-          const gridCell = this.grid.get(cellCollapse.coords);
-          return {
-            coords: cellCollapse.coords,
-            value: gridCell?.value
-          };
-        })
-      };
-      
-      if (emitEvents) this.emit("collapse", groupWithValues);
-      yield { type: "collapse", group: groupWithValues, affectedCells: result.affectedCells };
-      // Keep the snapshot alive since collapse succeeded - we might need to backtrack to it
-      return result;
-    } else {
-      this.log(LogLevel.DEBUG, `Collapse failed for node ${node.id}`);
-      // Remove reference since we're failing
-      this.snapshots.removeReference(snapshotId);
-      return result;
-    }
-  }
-
-  private *handleBacktrack(emitEvents: boolean = true): Generator<StepResult, boolean, unknown> {
-    this.log(LogLevel.INFO, "Starting backtrack");
-
-    for (let depth = 1; depth <= this.strategy.maxLevels; depth++) {
-      const viableNode = this.backtrackTree.findViableAncestor(depth);
-      if (!viableNode) {
-        continue;
-      }
-
-      this.log(LogLevel.INFO, `Backtracking to depth ${depth}, node ${viableNode.id}`);
-      
-      // Restore to this state
-      const marker = this.snapshots.getMarker(viableNode.snapshotId);
-      if (marker === undefined) {
-        this.log(LogLevel.WARN, `Failed to restore snapshot ${viableNode.snapshotId}`);
-        continue;
-      }
-      this.activePropagator().restore(marker);
-      this.checkPropagator();
-
-      // Move to this node
-      this.backtrackTree.moveToNode(viableNode);
-      
-      if (emitEvents) {
-        this.emit("backtrack", { cells: viableNode.targetCells.map(coords => ({ coords })), cause: "entropy" as const });
-      }
-      yield { type: "backtrack", depth };
-
-      // Check if this node still has untried possibilities
-      if (!this.exhaustionTracker.isExhausted(viableNode.targetCells, this.grid)) {
-        return true;
-      }
-
-      // Mark as exhausted and continue to deeper levels
-      this.backtrackTree.markExhausted(viableNode);
-    }
-
-    this.log(LogLevel.ERROR, "All backtrack levels exhausted");
-    return false;
-  }
-
-  private selectCellsToCollapse(): CellCoords[] {
-    let minEntropy = Infinity;
-    const candidates: Cell[] = [];
-
-    // Find cells with minimum entropy (fewest choices)
-    for (const [cell] of this.grid.iterate()) {
-      if (cell.collapsed) continue;
-
-      if (cell.choices.length < minEntropy) {
-        minEntropy = cell.choices.length;
-        candidates.length = 0;
-        candidates.push(cell);
-      } else if (cell.choices.length === minEntropy) {
-        candidates.push(cell);
-      }
-    }
-
-    if (candidates.length === 0) return [];
-
-    // Pick one cell randomly from candidates
-    const selectedCell = this.pick(candidates);
-    return [selectedCell.coords];
-  }
-
-  private getUntriedChoices(node: BacktrackNode): Map<string, TileDef[]> {
-    const untried = new Map<string, TileDef[]>();
-
-    for (const coords of node.targetCells) {
+  // Collapses every seeded cell, then propagates once, so seeded cells are
+  // also checked against each other. Returns the applied collapses, or
+  // undefined on contradiction.
+  private applySeed(initialSeed: CellCollapse[]): CellCollapse[] | undefined {
+    const propagator = this.activePropagator();
+    const applied: CellCollapse[] = [];
+    for (const { coords, value } of initialSeed) {
       const cell = this.grid.get(coords);
       if (!cell) continue;
-
-      const coordKey = `${coords[0]},${coords[1]}`;
-      const triedSet = node.triedChoices.get(coordKey) || new Set<TileId>();
-      
-      const availableChoices = cell.choices.filter(choice => !triedSet.has(choice.name));
-      if (availableChoices.length > 0) {
-        untried.set(coordKey, availableChoices);
-      }
-    }
-
-    return untried;
-  }
-
-  private selectChoices(cellCollapses: CellCollapse[], availableChoices: Map<string, TileDef[]>): Map<string, TileId> {
-    const selected = new Map<string, TileId>();
-
-    for (const cellCollapse of cellCollapses) {
-      const coordKey = `${cellCollapse.coords[0]},${cellCollapse.coords[1]}`;
-      const choices = availableChoices.get(coordKey);
-      
-      if (choices && choices.length > 0) {
-        const selectedTile = cellCollapse.value || this.pickWeighted(choices);
-        selected.set(coordKey, selectedTile.name);
-      }
-    }
-
-    return selected;
-  }
-
-  private updateTriedChoices(node: BacktrackNode, selectedChoices: Map<string, TileId>): void {
-    for (const [coordKey, tileId] of selectedChoices.entries()) {
-      if (!node.triedChoices.has(coordKey)) {
-        node.triedChoices.set(coordKey, new Set());
-      }
-      node.triedChoices.get(coordKey)!.add(tileId);
-    }
-  }
-
-  private collapseWithChoices(cellCollapses: CellCollapse[], selectedChoices: Map<string, TileId>): CollapseResult {
-    const affectedCells: Cell[] = [];
-    const tileMap = new Map<string, TileDef>();
-    
-    // Create tile lookup map
-    for (const tile of this.tileDefs) {
-      tileMap.set(tile.name, tile);
-    }
-
-    // First pass: validate all choices are compatible
-    for (const cellCollapse of cellCollapses) {
-      const cell = this.grid.get(cellCollapse.coords);
-      if (!cell) continue;
-
-      const coordKey = `${cellCollapse.coords[0]},${cellCollapse.coords[1]}`;
-      const tileId = selectedChoices.get(coordKey);
-      if (!tileId) continue;
-
-      const tile = tileMap.get(tileId);
-      if (!tile) continue;
-
-      // Check compatibility with neighbors
-      const neighbors = this.grid.getNeighbors(cellCollapse.coords);
-      for (let i = 0; i < neighbors.length; i++) {
-        const neighbor = neighbors[i];
-        if (!neighbor || !neighbor.collapsed) continue;
-
-        if (!this.canBeAdjacent(tile, cellCollapse.coords, i, neighbor.choices[0])) {
-          return { success: false, affectedCells: [] };
-        }
-      }
-    }
-
-    // Second pass: collapse every cell in the group, then propagate once, so
-    // cells of the same group are also checked against each other.
-    const propagator = this.activePropagator();
-    for (const cellCollapse of cellCollapses) {
-      const cell = this.grid.get(cellCollapse.coords);
-      if (!cell) continue;
-
-      const coordKey = `${cellCollapse.coords[0]},${cellCollapse.coords[1]}`;
-      const tileId = selectedChoices.get(coordKey);
-      if (!tileId) continue;
-
-      const tile = tileMap.get(tileId);
-      if (!tile) continue;
-
+      const tile = value ?? this.pickWeighted(cell.choices);
       propagator.collapse(cell, tile);
-      affectedCells.push(cell);
+      applied.push({ coords, value: cell.value ?? tile });
     }
-
-    const propagated = propagator.propagate();
+    const consistent = propagator.propagate();
     this.checkPropagator();
-    if (!propagated) {
-      this.log(LogLevel.DEBUG, "Contradiction during propagation");
-      return { success: false, affectedCells };
-    }
-
-    return { success: true, affectedCells };
+    return consistent ? applied : undefined;
   }
 
   // Unrecoverable failures outside the main loop are reported the same way
@@ -758,16 +352,6 @@ export class WFC extends EventEmitter {
     if (!this.options.debugChecks) return;
     const problem = this.activePropagator().checkInvariants();
     if (problem) throw new Error(`Propagation invariant violated: ${problem}`);
-  }
-
-  private performCleanup(): void {
-    const oldTime = Date.now() - 60000; // 1 minute ago
-    const cleaned = this.snapshots.cleanup(oldTime);
-    const pruned = this.backtrackTree.cleanup(this.strategy.maxLevels * 2);
-    
-    if ((cleaned > 0 || pruned > 0) && this.logLevel >= LogLevel.DEBUG) {
-      this.log(LogLevel.DEBUG, `Cleanup: removed ${cleaned} snapshots, ${pruned} tree nodes`);
-    }
   }
 
   private adjacencyTables(): AdjacencyTables {

@@ -109,7 +109,7 @@ export class AdjacencyTables {
 const EMPTY = new Int32Array(0);
 
 function toRule(value: string | Rule | undefined): Rule | undefined {
-  if (value === undefined || typeof value !== "string") return value;
+  if (typeof value !== "string") return value;
   const parsed = parseAdjacencyRule(value);
   if (parsed instanceof Error) throw new Error(`Failed to parse adjacency rule: ${parsed.message}`);
   return parsed;

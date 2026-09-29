@@ -216,15 +216,7 @@ describe("WFC Deterministic Behavior", () => {
       const runConstrainedWFC = () => {
         const grid = new SquareGrid(4, 4);
         const rng = new SeededRNG(seed);
-        const wfc = new WFC(constrainedTiles, grid, { 
-          random: rng,
-          backtrackStrategy: { 
-            name: 'test', 
-            maxLevels: 3, 
-            exhaustionPolicy: 'deferred' as const, 
-            cleanupFrequency: 10 
-          }
-        });
+        const wfc = new WFC(constrainedTiles, grid, { random: rng });
         
         let backtrackCount = 0;
         wfc.on("backtrack", () => backtrackCount++);

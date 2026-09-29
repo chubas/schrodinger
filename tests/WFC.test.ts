@@ -1,4 +1,4 @@
-import { WFC, StepResult } from "../src/WFC";
+import { WFC, StepResult, LogLevel } from "../src/WFC";
 import { SquareGrid } from "../src/Grid";
 import { TileDef } from "../src/TileDef";
 import { pickTiles, DeterministicRNG } from "./util";
@@ -46,6 +46,31 @@ const mockTiles: TileDef[] = [
 
 
 describe("WFC", () => {
+  describe("Logging", () => {
+    it("should not log anything with LogLevel.NONE, even on failure", () => {
+      const tiles: TileDef[] = [
+        { name: "A", adjacencies: ["1", "1", "1", "1"], draw: () => {} },
+        { name: "B", adjacencies: ["2", "2", "2", "2"], draw: () => {} },
+      ];
+      const wfc = new WFC(tiles, new SquareGrid(2, 1), { logLevel: LogLevel.NONE });
+      wfc.on("error", () => {});
+      const log = jest.spyOn(console, "log").mockImplementation(() => {});
+
+      try {
+        // A next to B is invalid, which fails and would log at ERROR level.
+        expect(() =>
+          wfc.start([
+            { coords: [0, 0], value: tiles[0] },
+            { coords: [1, 0], value: tiles[1] },
+          ]),
+        ).toThrow("Initial seed creates an impossible state");
+        expect(log).not.toHaveBeenCalled();
+      } finally {
+        log.mockRestore();
+      }
+    });
+  });
+
   describe("Basic Functionality", () => {
     it("should initialize with correct grid dimensions", () => {
       const grid = new SquareGrid(3, 3);
