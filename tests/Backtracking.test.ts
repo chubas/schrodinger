@@ -1,7 +1,9 @@
-import { WFC, LogLevel } from "../src/WFC";
+import seedrandom from "seedrandom";
+import { WFC } from "../src/WFC";
 import { SquareGrid } from "../src/Grid";
-import { pickTiles, DeterministicRNG } from "./util";
+import { pickTiles } from "./util";
 import { RuleType, SimpleRule } from "../src/AdjacencyGrammar";
+import { generateRandomTiles } from "../stress-test/randomTiles";
 
 // Create simple rules for testing
 const createSimpleRule = (value: string): SimpleRule => ({
@@ -64,8 +66,9 @@ const backtrackTiles = [
 
 describe("WFC Backtracking", () => {
   describe("Snapshot Management", () => {
-    it("should throw an error if the initial seed is invalid, and not attempt backtracking", async () => {
+    it("should throw an error if the initial seed is invalid, and not attempt backtracking", () => {
       const grid = new SquareGrid(2, 2);
+      // A and B can't be horizontal neighbors (their edges are "1" and "2").
       const initialSeed = [
         { coords: [0, 0] as [number, number], value: backtrackTiles.find((tile) => tile.name === 'A') },
         { coords: [1, 0] as [number, number], value: backtrackTiles.find((tile) => tile.name === 'B') },
@@ -74,57 +77,50 @@ describe("WFC Backtracking", () => {
       const wfc = new WFC(pickTiles(backtrackTiles, ['A', 'B', 'C']), grid);
       let backtrackCalled = false;
       wfc.on("backtrack", () => {
-        backtrackCalled = true; // This should not be called because the initial seed is invalid
+        backtrackCalled = true;
+      });
+      let emittedError: Error | undefined;
+      wfc.on("error", (error) => {
+        emittedError = error;
       });
 
-      const test = new Promise<void>((resolve) => {
-        wfc.on("error", (error) => {
-          // It should throw an error because the initial seed is invalid and there is no snapshot to backtrack to
-          expect(error).toBeDefined();
-          expect(backtrackCalled).toBe(false);
-          resolve();
-        });
-      });
-
-      wfc.start(initialSeed);
-      await test;
+      expect(() => wfc.start(initialSeed)).toThrow("Initial seed creates an impossible state");
+      expect(emittedError?.message).toBe("Initial seed creates an impossible state");
+      expect(backtrackCalled).toBe(false);
     });
   });
 
   describe("Backtracking Process", () => {
-    it("should attempt backtracking when no valid choices remain backtracktest", async () => {
-      const grid = new SquareGrid(2, 2);
+    it("should attempt backtracking when no valid choices remain backtracktest", () => {
+      // A choice that is locally consistent but leads to a contradiction a few
+      // collapses later. Found with:
+      //   npm run stress-test -- --tileset random --random-tiles 8 --random-labels 3 --width 3 --height 3
+      // (seed 21 needs one backtrack). If RNG usage changes, pick another
+      // successful seed with backtracks from that command's summary.
+      const tiles = generateRandomTiles(8, 3, 1);
+      const grid = new SquareGrid(3, 3);
+      const rng = seedrandom("21");
+      const wfc = new WFC(tiles, grid, { random: { random: () => rng(), setSeed: () => {} } });
 
-      // Set up RNG to force a situation where backtracking is needed
-      const rng = new DeterministicRNG([
-        0, // Pick cell [0, 0]
-        0.6, // Pick tile 'A
-      ]);
-
-      const wfc = new WFC(pickTiles(backtrackTiles, ['A', 'NoMatch']), grid, { random: rng });
-
-      await new Promise<void>((resolve, reject) => {
-        let backtrackCount = 0;
-        let collapseCount = 0;
-        wfc.on("backtrack", () => {
-          backtrackCount++;
-        });
-
-        // It should have collapsed only once, for the forced collapse of the whole grid after picking the A tile
-        wfc.on("collapse", (group) => {
-          collapseCount++;
-        });
-
-        // It should finish with one backtrack
-        wfc.on("complete", () => {
-          expect(backtrackCount).toBe(1);
-          // With the new implementation, we get 2 collapse events
-          expect(collapseCount).toBe(2);
-          resolve();
-        });
-
-        wfc.start();
+      let backtrackCount = 0;
+      let completed = false;
+      wfc.on("backtrack", () => {
+        backtrackCount++;
       });
+      wfc.on("complete", () => {
+        completed = true;
+      });
+
+      wfc.start();
+
+      expect(backtrackCount).toBeGreaterThan(0);
+      expect(completed).toBe(true);
+      for (const [cell, coords] of grid.iterate()) {
+        expect(cell.collapsed).toBe(true);
+        grid.getNeighbors(coords).forEach((neighbor, d) => {
+          if (neighbor) expect(wfc.canBeAdjacent(cell.value!, coords, d, neighbor.value!)).toBe(true);
+        });
+      }
     });
 
     it.todo("should retry many times up to the maxRetries limit")

@@ -454,7 +454,7 @@ export class WFC extends EventEmitter {
     const consistent = this.propagator.load();
     this.checkPropagator();
     if (!consistent) {
-      throw new Error("No solution exists - the tile constraints are contradictory on this grid");
+      throw this.failure("No solution exists - the tile constraints are contradictory on this grid", emitEvents);
     }
 
     // Handle initial seed if provided
@@ -467,7 +467,7 @@ export class WFC extends EventEmitter {
       
       const result = yield* this.attemptCollapse(group, emitEvents);
       if (!result.success) {
-        throw new Error("Initial seed creates an impossible state");
+        throw this.failure("Initial seed creates an impossible state", emitEvents);
       }
     }
 
@@ -738,6 +738,15 @@ export class WFC extends EventEmitter {
     }
 
     return { success: true, affectedCells };
+  }
+
+  // Unrecoverable failures outside the main loop are reported the same way
+  // as failures inside it: logged, emitted as "error", then thrown.
+  private failure(message: string, emitEvents: boolean): Error {
+    const error = new Error(message);
+    this.log(LogLevel.ERROR, "WFC execution failed:", error);
+    if (emitEvents) this.emit("error", error);
+    return error;
   }
 
   private activePropagator(): SupportPropagator {

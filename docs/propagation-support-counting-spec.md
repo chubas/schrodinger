@@ -185,7 +185,7 @@ These are on top of the field/lookup fixes already in `8d00674`, which were wort
 
 **Open items (not changed here):**
 
-- `tests/Backtracking.test.ts` has 2 failures, both already failing before this work. (1) The invalid-seed test waits for an `error` event, but the initial-seed failure path throws without emitting one. (2) The "should attempt backtracking" scenario no longer needs backtracking, because D1 removes its `NoMatch` tile up front; it needs a new scenario.
+- ~~`tests/Backtracking.test.ts` failures~~ Resolved after this work: failures before the main loop (contradictory constraints at load, invalid initial seed) now emit `error` before throwing, like failures inside it; and the backtracking test uses a scenario that needs a backtrack on a later collapse (random tileset, seed 21).
 - D2: the root-snapshot restore ("Snapshot -1 not found") is unchanged. With the trail it becomes "restore to marker 0".
 - `LogLevel.NONE` is ignored (`options.logLevel || LogLevel.WARN` treats `0` as unset).
 - Next performance step: an entropy bucket/heap plus a collapsed-cell counter to remove the O(C) per-step scans.
