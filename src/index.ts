@@ -25,4 +25,4 @@ export {
 
 // Types
 export type { Cell, Grid, GridSnapshot } from './Grid.js';
-export type { WFCOptions, CellCollapse, CollapseGroup, CollapseResult, WFCEvents, DeltaChange, CellDelta, DeltaSnapshot } from './WFC.js';
+export type { WFCOptions, CellCollapse, CollapseGroup, CollapseResult, WFCEvents } from './WFC.js';

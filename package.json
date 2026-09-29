@@ -19,7 +19,9 @@
     "benchmark:standard": "npm run benchmark -- --width 20 --height 20 --tiles 8 --repeat 3",
     "benchmark:compare": "node benchmark/compare.js",
     "build:stress-test": "tsc -p stress-test/tsconfig.json",
-    "stress-test": "npm run build:stress-test && node dist-stress-test/stress-test/stress-test.js"
+    "stress-test": "npm run build:stress-test && node dist-stress-test/stress-test/stress-test.js",
+    "stress-test:record": "npm run build:stress-test && bash stress-test/suite.sh record",
+    "stress-test:compare": "npm run build:stress-test && bash stress-test/suite.sh compare"
   },
   "author": "Rubén Medellín",
   "license": "ISC",

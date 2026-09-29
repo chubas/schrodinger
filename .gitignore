@@ -42,3 +42,5 @@ coverage/
 
 *benchmark*.json
 stress-test/results/*.json
+stress-test/results/suite/
+stress-test/baselines/

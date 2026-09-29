@@ -191,32 +191,45 @@ describe("Custom Grid Implementation", () => {
     });
 
     it("should work with WFC algorithm", () => {
+      // Every tile matches every tile, so a solution always exists.
+      const openTiles: TileDef[] = ["A", "B", "C"].map((name) => ({
+        name,
+        adjacencies: [createSimpleRule("x"), createSimpleRule("x"), createSimpleRule("x")],
+        draw: () => {},
+      }));
       const grid = new TriangleGrid(3);
-      const wfc = new WFC(triangleTiles, grid);
+      const wfc = new WFC(openTiles, grid);
 
       let completionCalled = false;
-      let errorCalled = false;
-
       wfc.on("complete", () => {
         completionCalled = true;
       });
 
+      wfc.start();
+
+      expect(completionCalled).toBe(true);
+      for (const [cell, coords] of grid.iterate()) {
+        expect(cell.collapsed).toBe(true);
+        expect(cell.choices.length).toBe(1);
+        grid.getNeighbors(coords).forEach((neighbor, d) => {
+          if (neighbor) expect(wfc.canBeAdjacent(cell.value!, coords, d, neighbor.value!)).toBe(true);
+        });
+      }
+    });
+
+    it("should report that no solution exists when the constraints can't be satisfied", () => {
+      // With these rotating edge labels, no assignment satisfies every cell's
+      // neighbor constraints on this (asymmetric) grid: 0 of the 3^6 possible.
+      const grid = new TriangleGrid(3);
+      const wfc = new WFC(triangleTiles, grid);
+
+      let errorCalled = false;
       wfc.on("error", () => {
         errorCalled = true;
       });
 
-      wfc.start();
-
-      // Either the algorithm completed successfully or failed with an error
-      expect(completionCalled || errorCalled).toBe(true);
-
-      // If it completed, verify all cells are collapsed
-      if (completionCalled) {
-        for (const [cell] of grid.iterate()) {
-          expect(cell.collapsed).toBe(true);
-          expect(cell.choices.length).toBe(1);
-        }
-      }
+      expect(() => wfc.start()).toThrow(/No solution exists/);
+      expect(errorCalled).toBe(true);
     });
   });
 });

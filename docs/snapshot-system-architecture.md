@@ -1,5 +1,7 @@
 # WFC Snapshot-Based Backtracking System Architecture
 
+> **Superseded (storage):** snapshots no longer copy cell choices (`DeltaSnapshot`/`CellDelta` were removed). A snapshot is now a position on the propagator's undo trail; see [propagation-support-counting-spec.md](propagation-support-counting-spec.md). The backtrack tree, reference counting and strategies described below are unchanged. The memory analysis below is outdated.
+
 ## Overview
 
 The WFC implementation uses a sophisticated snapshot-based backtracking mechanism to handle contradictions and invalid states during the wave function collapse process. This system allows the algorithm to revert to previous valid states when it encounters impossible configurations.

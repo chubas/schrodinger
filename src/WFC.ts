@@ -2,9 +2,9 @@ import { EventEmitter } from "events";
 import { Grid, Cell } from "./Grid.js";
 import { TileDef } from "./TileDef.js";
 import { RandomLib, DefaultRandom } from "./RandomLib.js";
-import { parseAdjacencyRule, Rule } from "./AdjacencyGrammar.js";
-import { matchAdjacencies } from "./Adjacencies.js";
 import { PrecomputedAdjacencies } from "./PrecomputedAdjacencies.js";
+import { AdjacencyTables } from "./AdjacencyTables.js";
+import { SupportPropagator } from "./SupportPropagator.js";
 
 export enum LogLevel {
   NONE = 0,
@@ -20,6 +20,10 @@ export type WFCOptions = {
   random?: RandomLib;
   logLevel?: LogLevel;
   backtrackStrategy?: BacktrackStrategy;
+  // Recompute propagation state from scratch after every propagation and
+  // restore, throwing on any mismatch with the incremental state. Slow;
+  // meant for tests and stress testing.
+  debugChecks?: boolean;
 };
 
 export type CellCollapse = {
@@ -51,21 +55,6 @@ export type WFCEvents = {
 // New hierarchical backtracking types
 export type CellCoords = [number, number];
 export type TileId = string;
-
-export interface CellDelta {
-  coords: CellCoords;
-  previousChoices: TileId[];
-  previousCollapsed: boolean;
-  previousValue?: TileId;
-}
-
-export interface DeltaSnapshot {
-  id: number;
-  parentSnapshotId?: number;
-  deltas: CellDelta[];
-  referenceCount: number;
-  timestamp: number;
-}
 
 export interface BacktrackNode {
   id: number;
@@ -103,33 +92,22 @@ export type StepResult = {
   depth?: number;
 };
 
-// Snapshot Manager - handles delta-only snapshots with reference counting
+// A snapshot is a position on the SupportPropagator's trail (undo log).
+interface TrailSnapshot {
+  id: number;
+  marker: number;
+  referenceCount: number;
+  timestamp: number;
+}
+
+// Snapshot Manager - tracks trail-position snapshots with reference counting
 class SnapshotManager {
-  private snapshots = new Map<number, DeltaSnapshot>();
+  private snapshots = new Map<number, TrailSnapshot>();
   private counter = 0;
 
-  createSnapshot(changedCells: Cell[], parentId?: number): number {
+  createSnapshot(marker: number): number {
     const id = this.counter++;
-    const deltas: CellDelta[] = [];
-
-    for (const cell of changedCells) {
-      deltas.push({
-        coords: cell.coords,
-        previousChoices: cell.choices.map(t => t.name),
-        previousCollapsed: cell.collapsed,
-        previousValue: cell.value?.name
-      });
-    }
-
-    const snapshot: DeltaSnapshot = {
-      id,
-      parentSnapshotId: parentId,
-      deltas,
-      referenceCount: 0,
-      timestamp: Date.now()
-    };
-
-    this.snapshots.set(id, snapshot);
+    this.snapshots.set(id, { id, marker, referenceCount: 0, timestamp: Date.now() });
     return id;
   }
 
@@ -150,64 +128,15 @@ class SnapshotManager {
     }
   }
 
-  restoreSnapshot(id: number, grid: Grid, tileDefs: TileDef[]): boolean {
+  // Returns the trail position to restore to, or undefined if the snapshot
+  // doesn't exist (e.g. the backtrack tree's root, which never has one).
+  getMarker(id: number): number | undefined {
     const snapshot = this.snapshots.get(id);
     if (!snapshot) {
       console.error(`Snapshot ${id} not found`);
-      return false;
+      return undefined;
     }
-
-    // Create a map for quick tile lookup
-    const tileMap = new Map<string, TileDef>();
-    for (const tile of tileDefs) {
-      tileMap.set(tile.name, tile);
-    }
-
-    // Restore each cell delta
-    for (const delta of snapshot.deltas) {
-      const cell = grid.get(delta.coords);
-      if (!cell) {
-        console.warn(`Cell at ${delta.coords} not found during restoration`);
-        continue;
-      }
-
-      // Validate that all tile names can be resolved
-      const missingTiles: string[] = [];
-      const resolvedTiles: TileDef[] = [];
-      
-      for (const tileName of delta.previousChoices) {
-        const tile = tileMap.get(tileName);
-        if (!tile) {
-          missingTiles.push(tileName);
-        } else {
-          resolvedTiles.push(tile);
-        }
-      }
-
-      if (missingTiles.length > 0) {
-        console.error(`Failed to resolve tiles: ${missingTiles.join(', ')}`);
-        return false;
-      }
-
-      if (resolvedTiles.length === 0) {
-        console.error(`Cell ${delta.coords} would have no choices after restoration`);
-        return false;
-      }
-
-      // Restore choices
-      cell.choices = resolvedTiles;
-      cell.collapsed = delta.previousCollapsed;
-      
-      // Restore value if it was collapsed
-      if (delta.previousValue && delta.previousCollapsed) {
-        const valueTile = tileMap.get(delta.previousValue);
-        cell.value = valueTile;
-      } else {
-        cell.value = undefined;
-      }
-    }
-
-    return true;
+    return snapshot.marker;
   }
 
   hasSnapshot(id: number): boolean {
@@ -368,23 +297,6 @@ class ExhaustionTracker {
   }
 }
 
-export type DeltaChange<Coords> = {
-  collapsedCell: Cell;
-  pickedValue: TileDef;
-  discardedValues: Array<{
-    coords: Coords;
-    tiles: TileDef[];
-    collapsed: boolean;
-  }>;
-  backtrack?: boolean;
-};
-
-interface ProposedChange {
-  cell: Cell;
-  newChoices: TileDef[];
-  originalChoices: TileDef[];
-}
-
 export class WFC extends EventEmitter {
   private readonly tileDefs: TileDef[];
   private readonly options: WFCOptions;
@@ -397,16 +309,15 @@ export class WFC extends EventEmitter {
   private grid: Grid;
   private readonly rng: RandomLib;
   private readonly collapseQueue: CollapseGroup[] = [];
-  private readonly propagationQueue: Set<Cell> = new Set();
   private readonly logLevel: LogLevel;
   private precomputedAdjacencies?: PrecomputedAdjacencies;
-  // Numeric tile index, built once, used to compile the (string-keyed)
-  // PrecomputedAdjacencies into a fast lookup structure - see
-  // compileAdjacencies(). The public PrecomputedAdjacencies shape stays
-  // name-keyed for backward-compatible serialization; only the internal
-  // runtime representation is index-based.
   private readonly tileIndexByName: Map<string, number> = new Map();
-  private compiledAdjacencies?: Map<string, Set<number>[][]>;
+  // Built lazily from the tileset + precomputed adjacencies; reset whenever
+  // the precomputed adjacencies change.
+  private tables?: AdjacencyTables;
+  // Created at the start of execute(); owns the propagation state that the
+  // grid's Cell objects mirror.
+  private propagator?: SupportPropagator;
 
   // New hierarchical backtracking system
   private snapshots: SnapshotManager;
@@ -536,7 +447,16 @@ export class WFC extends EventEmitter {
 
   *execute(initialSeed?: CellCollapse[], emitEvents: boolean = true): Generator<StepResult, void, unknown> {
     this.log(LogLevel.INFO, "Starting WFC execution");
-    
+
+    // Loading also removes tiles that have no compatible tile in some
+    // neighboring direction, before the first collapse.
+    this.propagator = new SupportPropagator(this.grid, this.tileDefs, this.adjacencyTables());
+    const consistent = this.propagator.load();
+    this.checkPropagator();
+    if (!consistent) {
+      throw new Error("No solution exists - the tile constraints are contradictory on this grid");
+    }
+
     // Handle initial seed if provided
     if (initialSeed && initialSeed.length > 0) {
       this.log(LogLevel.DEBUG, "Processing initial seed");
@@ -596,11 +516,7 @@ export class WFC extends EventEmitter {
   }
 
   private *attemptCollapse(group: CollapseGroup, emitEvents: boolean = true): Generator<StepResult, CollapseResult, unknown> {
-    // Get cells that have changed since last snapshot
-    const changedCells = this.getChangedCells();
-    
-    // Create snapshot
-    const snapshotId = this.snapshots.createSnapshot(changedCells);
+    const snapshotId = this.snapshots.createSnapshot(this.activePropagator().mark());
     this.snapshots.addReference(snapshotId);
     
     // Create backtrack node
@@ -666,11 +582,13 @@ export class WFC extends EventEmitter {
       this.log(LogLevel.INFO, `Backtracking to depth ${depth}, node ${viableNode.id}`);
       
       // Restore to this state
-      const restored = this.snapshots.restoreSnapshot(viableNode.snapshotId, this.grid, this.tileDefs);
-      if (!restored) {
+      const marker = this.snapshots.getMarker(viableNode.snapshotId);
+      if (marker === undefined) {
         this.log(LogLevel.WARN, `Failed to restore snapshot ${viableNode.snapshotId}`);
         continue;
       }
+      this.activePropagator().restore(marker);
+      this.checkPropagator();
 
       // Move to this node
       this.backtrackTree.moveToNode(viableNode);
@@ -715,18 +633,6 @@ export class WFC extends EventEmitter {
     // Pick one cell randomly from candidates
     const selectedCell = this.pick(candidates);
     return [selectedCell.coords];
-  }
-
-  private getChangedCells(): Cell[] {
-    // For now, return all cells that are not collapsed
-    // In a more sophisticated implementation, we'd track actual changes
-    const changed: Cell[] = [];
-    for (const [cell] of this.grid.iterate()) {
-      if (!cell.collapsed) {
-        changed.push(cell);
-      }
-    }
-    return changed;
   }
 
   private getUntriedChoices(node: BacktrackNode): Map<string, TileDef[]> {
@@ -806,7 +712,9 @@ export class WFC extends EventEmitter {
       }
     }
 
-    // Second pass: perform the collapse
+    // Second pass: collapse every cell in the group, then propagate once, so
+    // cells of the same group are also checked against each other.
+    const propagator = this.activePropagator();
     for (const cellCollapse of cellCollapses) {
       const cell = this.grid.get(cellCollapse.coords);
       if (!cell) continue;
@@ -818,74 +726,29 @@ export class WFC extends EventEmitter {
       const tile = tileMap.get(tileId);
       if (!tile) continue;
 
-      cell.collapsed = true;
-      cell.choices = [tile];
-      cell.value = tile;
+      propagator.collapse(cell, tile);
       affectedCells.push(cell);
     }
 
-    // Third pass: propagate constraints
-    this.propagationQueue.clear();
-    for (const cell of affectedCells) {
-      this.queueNeighborsForPropagation(cell);
-    }
-
-    const propagationResult = this.processConstraintPropagation();
-    if (!propagationResult) {
+    const propagated = propagator.propagate();
+    this.checkPropagator();
+    if (!propagated) {
+      this.log(LogLevel.DEBUG, "Contradiction during propagation");
       return { success: false, affectedCells };
     }
 
     return { success: true, affectedCells };
   }
 
-  private processConstraintPropagation(): boolean {
-    while (this.propagationQueue.size > 0) {
-      const cell = this.propagationQueue.values().next().value;
-      if (!cell) continue;
-
-      this.propagationQueue.delete(cell);
-      
-      const originalChoices = [...cell.choices];
-      const neighbors = this.grid.getNeighbors(cell.coords);
-
-      // Update choices based on all neighbors
-      for (let i = 0; i < neighbors.length; i++) {
-        const neighbor = neighbors[i];
-        if (!neighbor) continue;
-
-        const validChoices = this.filterValidAdjacencies(cell, neighbor, i);
-        cell.choices = cell.choices.filter(choice => validChoices.includes(choice));
-      }
-
-      // Check for contradictions
-      if (cell.choices.length === 0) {
-        this.log(LogLevel.DEBUG, `Cell ${cell.coords} has no valid choices after propagation`);
-        return false;
-      }
-
-      // If choices changed, queue neighbors for propagation
-      if (cell.choices.length !== originalChoices.length) {
-        this.queueNeighborsForPropagation(cell);
-      }
-
-      // Auto-collapse if only one choice remains
-      if (cell.choices.length === 1 && !cell.collapsed) {
-        cell.collapsed = true;
-        cell.value = cell.choices[0];
-        this.queueNeighborsForPropagation(cell);
-      }
-    }
-
-    return true;
+  private activePropagator(): SupportPropagator {
+    if (!this.propagator) throw new Error("Propagation state is only available while execute() is running");
+    return this.propagator;
   }
 
-  private queueNeighborsForPropagation(cell: Cell): void {
-    const neighbors = this.grid.getNeighbors(cell.coords);
-    for (const neighbor of neighbors) {
-      if (neighbor && !neighbor.collapsed) {
-        this.propagationQueue.add(neighbor);
-      }
-    }
+  private checkPropagator(): void {
+    if (!this.options.debugChecks) return;
+    const problem = this.activePropagator().checkInvariants();
+    if (problem) throw new Error(`Propagation invariant violated: ${problem}`);
   }
 
   private performCleanup(): void {
@@ -898,145 +761,20 @@ export class WFC extends EventEmitter {
     }
   }
 
-  // Helper method to validate proposed changes
-  private validateProposedChanges(
-    proposedChanges: Map<string, ProposedChange>,
-  ): Set<string> {
-    const invalidChanges = new Set<string>();
-
-    for (const [coordKey, change] of proposedChanges) {
-      const { cell, newChoices } = change;
-
-      // Check if cell would have no valid choices
-      if (newChoices.length === 0) {
-        invalidChanges.add(coordKey);
-        continue;
-      }
-
-      // Check if changes would create conflicts with neighbors
-      const neighbors = this.grid.getNeighbors(cell.coords);
-      for (let i = 0; i < neighbors.length; i++) {
-        const neighbor = neighbors[i];
-        if (!neighbor) continue;
-
-        const neighborKey = `${neighbor.coords[0]},${neighbor.coords[1]}`;
-        const neighborChoices = proposedChanges.has(neighborKey)
-          ? proposedChanges.get(neighborKey)!.newChoices
-          : neighbor.choices;
-
-        // Check if there's at least one valid adjacency between the cells
-        let hasValidAdjacency = false;
-        for (const option of newChoices) {
-          for (const neighborOption of neighborChoices) {
-            const d1 = option.adjacencies[i];
-            const adjacencyMap = this.grid.getAdjacencyMap(cell.coords);
-            const oppositeDirection = adjacencyMap[i];
-            const d2 = neighborOption.adjacencies[oppositeDirection];
-            if (d1 === d2) {
-              hasValidAdjacency = true;
-              break;
-            }
-          }
-          if (hasValidAdjacency) break;
-        }
-
-        if (!hasValidAdjacency) {
-          invalidChanges.add(coordKey);
-          break;
-        }
-      }
-    }
-
-    return invalidChanges;
-  }
-
-  // Helper method to ensure an adjacency value is a Rule object
-  private ensureRule(adjacencyValue: string | Rule): Rule {
-    if (typeof adjacencyValue === 'string') {
-      const result = parseAdjacencyRule(adjacencyValue);
-      if (result instanceof Error) {
-        throw new Error(`Failed to parse adjacency rule: ${result.message}`);
-      }
-      return result;
-    }
-    return adjacencyValue;
+  private adjacencyTables(): AdjacencyTables {
+    this.tables ??= new AdjacencyTables(this.tileDefs, this.grid.adjacencyMaps, this.precomputedAdjacencies);
+    return this.tables;
   }
 
   // Checks if two tiles can be adjacent in the given direction
   canBeAdjacent(tile1: TileDef, coords: [number, number], direction: number, tile2: TileDef): boolean {
-    // If precomputed adjacencies are available, use the compiled (numeric,
-    // Set-based) form for an O(1) lookup instead of scanning name arrays.
-    if (this.compiledAdjacencies) {
-      const adjacencyType = this.grid.getAdjacencyType(coords);
-      const perTile = this.compiledAdjacencies.get(adjacencyType);
-      const tile1Index = this.tileIndexByName.get(tile1.name);
+    const t1 = this.tileIndexByName.get(tile1.name);
+    const t2 = this.tileIndexByName.get(tile2.name);
+    if (t1 === undefined || t2 === undefined) return false;
 
-      if (perTile && tile1Index !== undefined) {
-        const compatible = perTile[tile1Index]?.[direction];
-        if (compatible) {
-          const tile2Index = this.tileIndexByName.get(tile2.name);
-          return tile2Index !== undefined && compatible.has(tile2Index);
-        }
-      }
-    }
-
-    // Otherwise fall back to rule matching
-    const adjacencyMap = this.grid.getAdjacencyMap(coords);
-    const oppositeDirection = adjacencyMap[direction];
-    
-    return matchAdjacencies(
-      this.ensureRule(tile1.adjacencies[direction]),
-      this.ensureRule(tile2.adjacencies[oppositeDirection])
-    );
-  }
-
-  // TODO: Implementation is quadratic, can be optimized by precalculating the total of possible adjacencies
-  filterValidAdjacencies(
-    cell: Cell,
-    neighbor: Cell,
-    direction: number,
-  ): TileDef[] {
-    const valid = new Set<TileDef>();
-    const adjacencyMap = this.grid.getAdjacencyMap(cell.coords);
-
-    // If neighbor is collapsed, we must match its adjacency
-    if (neighbor.collapsed) {
-      const neighborTile = neighbor.choices[0];
-      for (const option of cell.choices) {
-        if (this.canBeAdjacent(option, cell.coords, direction, neighborTile)) {
-          valid.add(option);
-        }
-      }
-    } else {
-      // Otherwise, check all possible combinations
-      for (const option of cell.choices) {
-        for (const neighborOption of neighbor.choices) {
-          // Tiles can connect if their adjacencies match
-          if (this.canBeAdjacent(option, cell.coords, direction, neighborOption)) {
-            valid.add(option);
-            break; // Once we find a valid neighbor, we can stop checking this option
-          }
-        }
-      }
-    }
-
-    return Array.from(valid);
-  }
-
-  undoChange(delta: DeltaChange<[number, number]>): Cell[] {
-    const revertedCells = [];
-    const { collapsedCell, pickedValue, discardedValues } = delta;
-    collapsedCell.collapsed = false;
-    collapsedCell.forbidden.push(pickedValue);
-    for (const { coords, tiles } of discardedValues) {
-      const cell = this.grid.get(coords);
-      if (cell) {
-        cell.choices = [...cell.choices, ...tiles];
-        cell.collapsed = cell.choices.length === 1;
-        revertedCells.push(cell);
-      }
-    }
-    return revertedCells;
+    const tables = this.adjacencyTables();
+    const type = tables.typeIndex(this.grid.getAdjacencyType(coords));
+    return tables.isCompatible(type, direction, t1, t2);
   }
 
   // Public method to safely iterate over the current grid state
@@ -1054,45 +792,12 @@ export class WFC extends EventEmitter {
   /**
    * Sets precomputed adjacencies to be used for optimized adjacency checks.
    * The (name-keyed, array-valued) PrecomputedAdjacencies format is kept as
-   * the public/serializable shape; it's compiled once here into a numeric,
-   * Set-based structure that canBeAdjacent actually reads at runtime.
+   * the public/serializable shape; the engine compiles it into index-based
+   * AdjacencyTables on first use. Must be called before execute()/start().
    * @param precomputed The precomputed adjacencies object
    */
   setPrecomputedAdjacencies(precomputed: PrecomputedAdjacencies): void {
     this.precomputedAdjacencies = precomputed;
-    this.compiledAdjacencies = this.compileAdjacencies(precomputed);
-  }
-
-  private compileAdjacencies(precomputed: PrecomputedAdjacencies): Map<string, Set<number>[][]> {
-    const compiled = new Map<string, Set<number>[][]>();
-
-    for (const tileName of Object.keys(precomputed)) {
-      const tileIndex = this.tileIndexByName.get(tileName);
-      if (tileIndex === undefined) continue; // Not one of this WFC instance's tiles
-
-      const byAdjacencyType = precomputed[tileName];
-      for (const adjacencyType of Object.keys(byAdjacencyType)) {
-        let perTile = compiled.get(adjacencyType);
-        if (!perTile) {
-          perTile = new Array(this.tileDefs.length);
-          compiled.set(adjacencyType, perTile);
-        }
-
-        const byDirection = byAdjacencyType[adjacencyType];
-        const perDirection: Set<number>[] = [];
-        for (const [directionKey, tileNames] of Object.entries(byDirection)) {
-          const direction = Number(directionKey);
-          const indices = new Set<number>();
-          for (const name of tileNames) {
-            const index = this.tileIndexByName.get(name);
-            if (index !== undefined) indices.add(index);
-          }
-          perDirection[direction] = indices;
-        }
-        perTile[tileIndex] = perDirection;
-      }
-    }
-
-    return compiled;
+    this.tables = undefined;
   }
 }

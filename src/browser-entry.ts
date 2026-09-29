@@ -31,8 +31,5 @@ export type {
   CellCollapse,
   CollapseGroup,
   CollapseResult,
-  WFCEvents,
-  DeltaChange,
-  CellDelta,
-  DeltaSnapshot
+  WFCEvents
 } from "./WFC.js";
