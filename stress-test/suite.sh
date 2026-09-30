@@ -19,9 +19,11 @@ RANDOM_B="--tileset random --random-tiles 32 --random-labels 8 --width 10 --heig
 CONFIGS=(
   "iso-10x15|--runs 1000"
   "iso-20x30|--runs 50 --width 20 --height 30"
+  "iso-40x60|--runs 30 --width 40 --height 60"
   "random-a|$RANDOM_A --runs 1000"
   "random-b|$RANDOM_B --runs 1000"
   "random-a-6x6-checked|--tileset random --random-tiles 32 --random-labels 6 --width 6 --height 6 --runs 200 --check-invariants"
+  "random-a-restarts-checked|--tileset random --random-tiles 32 --random-labels 6 --width 6 --height 6 --runs 200 --restart-after 2 --check-invariants"
 )
 
 if [[ "$MODE" != "record" && "$MODE" != "compare" ]]; then

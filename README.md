@@ -17,7 +17,7 @@ You describe your tiles and which sides may touch; the engine fills a grid (or a
 
 - **Grid-agnostic.** The engine only needs each cell's neighbours and how two neighbours face each other. Square, hexagonal and 3D cube grids are built in; a [custom grid](docs/custom-grids.md) is a few dozen lines (there's a binary tree in the examples).
 - **Expressive rules.** Tile sides can be plain labels or [rules](docs/adjacency-grammar.md) with choice (`a|b`), negation (`^a`), combinations (`a+b`) and directional "must differ" relationships (`[a>b]`).
-- **Complete backtracking.** On a contradiction the engine backtracks depth-first, so given enough budget it finds a solution whenever one exists, or proves that none does. A configurable budget bounds the effort (see [Limitations](#limitations) for when that matters).
+- **Complete backtracking with restarts.** On a contradiction the engine backtracks depth-first, and when an attempt goes badly it starts over with fresh random choices, so large grids finish instead of thrashing. Given enough budget it finds a solution whenever one exists, or proves that none does. A configurable budget bounds the effort.
 - **Reproducible.** Give it a seeded random source and get the same result every time.
 - **Fast.** Propagation uses incremental support counting with an undo log instead of re-checking tiles: a 10×15 grid with 90 tiles takes about 5 ms, and the time of a successful run grows roughly linearly with grid size.
 - **Observable.** Events for every collapse and backtrack, or drive it one step at a time with a generator to animate it.
@@ -125,10 +125,11 @@ for (const step of wfc.execute()) {} // the same run, one step at a time
 |---|---|---|
 | `collapse` | `{ cells: [{ coords, value }], cause }` | a cell was given a tile and the consequences propagated (`cause` is `'entropy'` for the engine's choices, `'initial'` for pinned cells) |
 | `backtrack` | `{ cells: [{ coords, value }], cause }` | a choice led to a contradiction and was undone; that tile is ruled out for that cell |
+| `restart` | `{ restarts, backtracks }` | the attempt needed too many backtracks, so the engine started over from the initial cells (see [Restarts](#restarts)); `restarts` and `backtracks` are totals so far |
 | `complete` | none | every cell is collapsed |
 | `error` | `Error` | the run failed (it is also thrown) |
 
-**`execute()` is a generator** yielding `{ type: 'collapse' | 'backtrack' | 'complete', group, affectedCells, depth }` after each step, which is how the browser demos animate one collapse per frame. See [docs/generator-functionality.md](docs/generator-functionality.md).
+**`execute()` is a generator** yielding `{ type: 'collapse' | 'backtrack' | 'restart' | 'complete', group, affectedCells, depth }` after each step (after a `restart` every cell except the initial ones is uncollapsed again), which is how the browser demos animate one collapse per frame. See [docs/generator-functionality.md](docs/generator-functionality.md).
 
 **Reproducibility.** The engine takes a random source with `random()` and `setSeed()` (by default `Math.random`, which ignores seeds). Pass a seedable one to make runs repeatable:
 
@@ -143,7 +144,8 @@ const wfc = new WFC(tiles, grid, { random: mySeededRandom(42) });
 ```js
 new WFC(tiles, grid, {
   random,        // RandomLib ({ random(), setSeed() }); default Math.random
-  maxRetries,    // maximum number of backtracks before giving up; default 10000
+  maxRetries,    // maximum number of backtracks, in total, before giving up; default 10000
+  restartAfter,  // restart cutoff unit, in backtracks; default 25; 0 disables restarts
   logLevel,      // LogLevel.NONE | ERROR | WARN (default) | INFO | DEBUG
   debugChecks,   // recompute internal state after every step and throw on any mismatch; slow, for testing
 });
@@ -151,20 +153,30 @@ new WFC(tiles, grid, {
 
 `backtrackStrategy` and `backtrackStep` from earlier versions are ignored.
 
+## Restarts
+
+Backtracking always undoes the most recent choice first. That is the right thing when the last few choices caused the problem, but when the real mistake was made long ago, the engine can spend its whole budget re-trying recent choices that can't fix it. On large grids that used to mean many runs never finished.
+
+So when an attempt has needed too many backtracks, the engine throws it away and starts over: everything is undone except the initial cells you passed to `start()`, and the next attempt draws different random numbers from the same random source, so it makes different choices. The cutoff follows the Luby sequence, `restartAfter × (1, 1, 2, 1, 1, 2, 4, 1, 1, 2, …)` backtracks: mostly short attempts, with ever longer ones now and then, so the search stays complete and can still prove that no solution exists.
+
+- `restartAfter` (default 25) is the unit. Runs that need no more than that many backtracks are unaffected.
+- `restartAfter: 0` turns restarts off, which makes *proving* that a hard instance has no solution faster (see [Limitations](#limitations)), at the price of the large-grid behaviour above.
+- Restarts count against `maxRetries`, and are reported as `restart` events.
+
 ## Errors
 
 When the engine hits a contradiction it undoes its most recent choice, rules that tile out for that cell, and tries again, undoing earlier choices if it has to. A run ends in one of three ways:
 
 - it finishes and every cell has a tile;
 - it throws **`No solution exists - ...`**: it tried everything, so no assignment satisfies the rules for this grid and these initial cells (this is proven, not a guess);
-- it throws **`Gave up after N backtracks ...`**: the budget (`maxRetries`) ran out first. A solution may still exist. Raising the budget can help, but often the quickest fix is simply to run again with a different seed (see [Limitations](#limitations)).
+- it throws **`Gave up after N backtracks (R restarts) ...`**: the budget (`maxRetries`) ran out first. A solution may still exist. Raise `maxRetries` to search longer, or run again with a different seed.
 
 ```js
 try {
   wfc.start();
 } catch (error) {
   if (error.message.startsWith('No solution exists')) { /* the rules can't be satisfied */ }
-  else if (error.message.startsWith('Gave up')) { /* try a different seed, or a bigger budget */ }
+  else if (error.message.startsWith('Gave up')) { /* try a bigger budget or a different seed */ }
   else throw error;
 }
 ```
@@ -187,20 +199,24 @@ An invalid starting configuration ("Initial seed creates an impossible state") f
 
 ## Performance
 
-Times for a **successful** run on a laptop, with the 90-tile isometric tileset from the demos (measured with seeds 1 upwards; your numbers will differ):
+Results on a laptop with the 90-tile isometric tileset from the demos, using seeds 1 upwards and the default options (your numbers will differ). "Finished" is the number of seeds that produced a solution within the default budget; the last column is the same count with restarts turned off (`restartAfter: 0`).
 
-| Grid | Cells | Time per successful run |
-|---|---|---|
-| 10×15 | 150 | ~5 ms |
-| 20×30 | 600 | ~11 ms |
-| 30×40 | 1,200 | ~27 ms |
-| 40×60 | 2,400 | ~50 ms |
+| Grid | Cells | Time per successful run | Finished | Without restarts |
+|---|---|---|---|---|
+| 10×15 | 150 | ~5 ms | 100 / 100 | 100 / 100 |
+| 20×30 | 600 | ~12 ms | 100 / 100 | 94 / 100 |
+| 30×40 | 1,200 | ~29 ms | 50 / 50 | 38 / 50 |
+| 40×60 | 2,400 | ~107 ms | 30 / 30 | 15 / 30 |
+| 80×80 | 6,400 | ~2.2 s | 9 / 10 | 0 / 10 |
+
+Time grows roughly linearly with the number of cells until the grid gets large enough that attempts start failing and restarting (about 1.4 restarts per run at 40×60, about 19 at 80×80).
 
 Comparing tile rules and building the lookup tables (a few milliseconds for 90 tiles) happens once per `WFC` instance, when it first runs, and doesn't depend on the grid's size. If you create many instances of the same tileset, `AdjacencyPrecomputer` and `setPrecomputedAdjacencies` skip the rule comparisons. How the engine works and how it was measured is written up in [docs/propagation-support-counting-spec.md](docs/propagation-support-counting-spec.md).
 
 ## Limitations
 
-- **Large grids with tightly constrained tilesets can exhaust the backtrack budget.** Backtracking always undoes the *most recent* choice first. If the real mistake was made long ago, the engine can spend its whole budget re-trying recent choices that can't fix it. With the isometric tileset (each side of a tile fits only 3 to 15 of the 90 tiles), the runs that finished within the default budget were: 10×15 30 of 30 seeds, 20×30 19 of 20, 30×40 8 of 10, 40×60 3 of 6. Ten times the budget didn't change the 40×60 result, but successful runs need almost no backtracking, so when a run gives up, **running again with a different seed is usually the fastest fix.** Restarting automatically is the obvious improvement and is on the [TODO](TODO.md) list.
+- **Very large grids with tightly constrained tilesets are slow.** Restarts make them finish (80×80 above), but each restart repeats work, so they can take seconds. A search that learns why it failed (backjumping) would waste less; see [TODO.md](TODO.md).
+- **Proving that no solution exists can take longer with restarts on**, because it needs one attempt long enough to exhaust the search. On colouring complete graphs with too few colours it took 6.6×, 11× and 15× the backtracks of plain search for proofs that need 719, 5,039 and 40,319 backtracks; proofs that need fewer than 25 are unaffected. Set `restartAfter: 0` if you mostly need that.
 - **Rotations, reflections and boundary wrapping aren't built in** (see above and [TODO.md](TODO.md)).
 - **`TriangularGrid`** exists in the source but isn't exported: its neighbour relation is wrong.
 - Everything else known is in [TODO.md](TODO.md).

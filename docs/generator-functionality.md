@@ -62,14 +62,14 @@ Each step yields a `StepResult` object with the following structure:
 
 ```typescript
 type StepResult = {
-  type: "collapse" | "backtrack" | "complete";
+  type: "collapse" | "backtrack" | "restart" | "complete";
   group?: CollapseGroup;
   affectedCells?: Cell[];
   depth?: number;
 };
 ```
 
-- `type`: what just happened: a cell was collapsed, a decision was undone (backtrack), or the run finished
+- `type`: what just happened: a cell was collapsed, a decision was undone (`backtrack`), the attempt was abandoned and started over from the initial cells (`restart`: every cell except the initial ones is uncollapsed again), or the run finished
 - `group`: for `collapse`, the cell and the tile it was given (`group.cells[0].coords` / `.value`); for `backtrack`, the decision that was undone and ruled out. A seeded start yields one `collapse` with `cause: "initial"` covering all the seeded cells.
 - `affectedCells`: for `collapse`, the cells that were collapsed
 - `depth`: for `backtrack`, how many decisions the current backtrack has undone so far. It is 1 when ruling out the last decision was enough, and grows when that also led to a contradiction and earlier decisions had to be undone as well.

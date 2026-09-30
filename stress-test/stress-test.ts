@@ -35,6 +35,7 @@ interface Options {
   width: number;
   height: number;
   maxRetries?: number;
+  restartAfter?: number;
   tileset: TilesetName;
   randomTiles: number;
   randomLabels: number;
@@ -65,6 +66,7 @@ interface RunResult {
   steps: number;
   collapses: number;
   backtracks: number;
+  restarts: number;
   backtrackDepths: number[];
   backtrackSizes: number[];
   avgEntropy: number;
@@ -75,6 +77,7 @@ interface RunResult {
 // Config keys that must match for a baseline comparison to be meaningful.
 const COMPARABLE_KEYS: (keyof Options)[] = [
   "tileset",
+  "restartAfter",
   "width",
   "height",
   "randomTiles",
@@ -119,6 +122,7 @@ Options:
   --width <n>            Grid width in tiles (default: 10, matches iso.js)
   --height <n>           Grid height in tiles (default: 15, matches iso.js)
   --max-retries <n>      Backtrack budget, WFCOptions.maxRetries (default: the engine default)
+  --restart-after <n>    WFCOptions.restartAfter: restart cutoff unit in backtracks, 0 = never restart (default: the engine default)
   --tileset <name>       iso (the iso.js tileset, default) | random (seeded edge-label tileset)
   --random-tiles <n>     Tile count for --tileset random (default: 24)
   --random-labels <n>    Distinct edge labels for --tileset random (default: 4)
@@ -191,6 +195,9 @@ function parseArgs(): Options {
         break;
       case "--max-retries":
         opts.maxRetries = parseInt(args[++i], 10);
+        break;
+      case "--restart-after":
+        opts.restartAfter = parseFloat(args[++i]);
         break;
       case "--tileset":
         opts.tileset = args[++i] as TilesetName;
@@ -314,6 +321,7 @@ function traceEntry(step: StepResult): string {
     return "C:" + cells.map((c) => `${c.coords.join(",")}=${c.value?.name}`).join(";");
   }
   if (step.type === "backtrack") return `B:${step.depth}`;
+  if (step.type === "restart") return "R";
   return "done";
 }
 
@@ -327,12 +335,14 @@ function runOnce(seed: number, tiles: TileDef[], precomputed: PrecomputedAdjacen
   const wfc = new WFC(tiles, grid, {
     random: rng,
     maxRetries: opts.maxRetries,
+    restartAfter: opts.restartAfter,
     logLevel: opts.verbose ? LogLevel.DEBUG : LogLevel.NONE,
     debugChecks: opts.checkInvariants,
   });
   wfc.setPrecomputedAdjacencies(precomputed);
 
   let collapses = 0;
+  let restarts = 0;
   const backtrackDepths: number[] = [];
   const backtrackSizes: number[] = [];
   const entropySamples: number[] = [];
@@ -380,6 +390,8 @@ function runOnce(seed: number, tiles: TileDef[], precomputed: PrecomputedAdjacen
       trace.update(traceEntry(value) + "\n");
       if (value.type === "collapse") {
         collapses++;
+      } else if (value.type === "restart") {
+        restarts++;
       } else if (value.type === "backtrack") {
         backtrackDepths.push(value.depth ?? -1);
         if (!opts.fast) {
@@ -428,6 +440,7 @@ function runOnce(seed: number, tiles: TileDef[], precomputed: PrecomputedAdjacen
     steps,
     collapses,
     backtracks: backtrackDepths.length,
+    restarts,
     backtrackDepths,
     backtrackSizes,
     avgEntropy,
@@ -473,7 +486,9 @@ function printSummary(results: RunResult[], overallDurationMs: number, opts: Opt
   console.log(`Invalid solutions: ${invalid.length}`);
   console.log(`Total time: ${(overallDurationMs / 1000).toFixed(2)}s  Avg/run: ${(overallDurationMs / n).toFixed(2)}ms`);
   console.log(`Avg collapses/run: ${avg(results.map((r) => r.collapses)).toFixed(2)}`);
-  console.log(`Avg backtracks/run: ${avg(results.map((r) => r.backtracks)).toFixed(2)}`);
+  console.log(`Avg backtracks/run: ${avg(results.map((r) => r.backtracks)).toFixed(2)}  Avg restarts/run: ${avg(results.map((r) => r.restarts)).toFixed(3)}`);
+  const okTimes = successes.map((r) => r.durationMs);
+  if (okTimes.length) console.log(`Successful runs: avg ${avg(okTimes).toFixed(2)}ms, max ${Math.max(...okTimes.slice(0, 100000)).toFixed(1)}ms`);
 
   if (!opts.fast) {
     console.log(`Avg entropy (mean of per-run averages): ${avg(results.map((r) => r.avgEntropy)).toFixed(3)}`);

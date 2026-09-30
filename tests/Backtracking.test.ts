@@ -1,5 +1,5 @@
 import seedrandom from "seedrandom";
-import { WFC, LogLevel, StepResult } from "../src/WFC";
+import { WFC, LogLevel, StepResult, luby } from "../src/WFC";
 import { Cell, Grid, GridSnapshot, SquareGrid } from "../src/Grid";
 import { TileDef } from "../src/TileDef";
 import { AdjacencyTables } from "../src/AdjacencyTables";
@@ -46,6 +46,65 @@ function solutionExists(tiles: TileDef[], grid: SquareGrid): boolean {
   };
   return search(0);
 }
+
+// Every cell is adjacent to every other cell; a cell's directions are the other
+// cells in order. With n colours a complete graph needs at least n cells' worth
+// of distinct colours, so n + 1 cells can't be coloured.
+class CompleteGraphGrid implements Grid<[number]> {
+  adjacencyMaps: Record<string, number[]> = {};
+  private cells: Cell<[number]>[];
+
+  constructor(private nodes: number) {
+    this.cells = Array.from({ length: nodes }, (_, i) => ({ choices: [], collapsed: false, forbidden: [], coords: [i] as [number] }));
+    for (let i = 0; i < nodes; i++) {
+      // Direction d of node i is node j (skipping i); from j, node i is direction i if i < j, else i - 1.
+      this.adjacencyMaps[`n${i}`] = Array.from({ length: nodes - 1 }, (_, d) => {
+        const j = d < i ? d : d + 1;
+        return i < j ? i : i - 1;
+      });
+    }
+  }
+  *iterate(): IterableIterator<[Cell<[number]>, [number]]> {
+    for (const cell of this.cells) yield [cell, cell.coords];
+  }
+  get([i]: [number]) {
+    return this.cells[i] ?? null;
+  }
+  set([i]: [number], cell: Cell<[number]>) {
+    this.cells[i] = cell;
+  }
+  getNeighbors([i]: [number]) {
+    return this.cells.filter((_, j) => j !== i);
+  }
+  getCells() {
+    return this.cells;
+  }
+  clone(): Grid<[number]> {
+    return this;
+  }
+  toSnapshot(): GridSnapshot {
+    return { cells: this.cells, width: this.nodes, height: 1 };
+  }
+  getAdjacencyType([i]: [number]) {
+    return `n${i}`;
+  }
+  getAdjacencyMap([i]: [number]) {
+    return this.adjacencyMaps[`n${i}`];
+  }
+}
+
+// Colour i may touch colour j exactly when i != j: [ci>cj] only matches [cj>ci].
+const colourTiles = (colours: number): TileDef[] =>
+  Array.from({ length: colours }, (_, i) => ({
+    name: `c${i}`,
+    adjacencies: Array.from({ length: colours }, () =>
+      Array.from({ length: colours }, (_, j) => j)
+        .filter((j) => j !== i)
+        .map((j) => `[c${i}>c${j}]`)
+        .join("|"),
+    ),
+    draw: () => {},
+  }));
 
 // Three mutually adjacent cells.
 class TriangleCycleGrid implements Grid<[number]> {
@@ -245,21 +304,26 @@ describe("WFC Backtracking", () => {
           const exists = solutionExists(tiles, new SquareGrid(3, 3));
           exists ? solvable++ : unsolvable++;
 
-          for (const runSeed of [1, 2, 3]) {
-            const grid = new SquareGrid(3, 3);
-            const wfc = new WFC(tiles, grid, {
-              random: seeded(`${tileCount}-${labels}-${tilesetSeed}-${runSeed}`),
-              maxRetries: 1_000_000,
-              logLevel: LogLevel.NONE,
-              debugChecks: true,
-            });
-            wfc.on("error", () => {});
+          // Without restarts, and restarting as eagerly as possible: neither
+          // may change whether a solution is found or proven not to exist.
+          for (const restartAfter of [0, 1]) {
+            for (const runSeed of [1, 2, 3]) {
+              const grid = new SquareGrid(3, 3);
+              const wfc = new WFC(tiles, grid, {
+                random: seeded(`${tileCount}-${labels}-${tilesetSeed}-${runSeed}`),
+                maxRetries: 1_000_000,
+                restartAfter,
+                logLevel: LogLevel.NONE,
+                debugChecks: true,
+              });
+              wfc.on("error", () => {});
 
-            if (exists) {
-              wfc.start();
-              expectValidSolution(wfc, grid);
-            } else {
-              expect(() => wfc.start()).toThrow(/^No solution exists/);
+              if (exists) {
+                wfc.start();
+                expectValidSolution(wfc, grid);
+              } else {
+                expect(() => wfc.start()).toThrow(/^No solution exists/);
+              }
             }
           }
         }
@@ -281,6 +345,86 @@ describe("WFC Backtracking", () => {
       wfc.on("error", () => {});
 
       expect(() => wfc.start()).toThrow(/^No solution exists/);
+    });
+  });
+
+  describe("Restarts", () => {
+    const tiles = generateRandomTiles(32, 6, 1);
+    const run = (seed: number, options: ConstructorParameters<typeof WFC>[2] = {}, initialSeed?: Parameters<WFC["start"]>[0]) => {
+      const grid = new SquareGrid(10, 10);
+      const wfc = new WFC(tiles, grid, { random: seeded(seed), logLevel: LogLevel.NONE, ...options });
+      const restarts: { restarts: number; backtracks: number }[] = [];
+      wfc.on("restart", (info) => restarts.push(info));
+      wfc.on("error", () => {});
+      wfc.start(initialSeed);
+      return { wfc, grid, restarts };
+    };
+
+    it("generates the Luby sequence", () => {
+      expect(Array.from({ length: 15 }, (_, i) => luby(i + 1))).toEqual([1, 1, 2, 1, 1, 2, 4, 1, 1, 2, 1, 1, 2, 4, 8]);
+    });
+
+    it("starts over, keeps the initial seed, and still produces a valid solution", () => {
+      let runsWithRestarts = 0;
+      for (let seed = 1; seed <= 15; seed++) {
+        const { wfc, grid, restarts } = run(seed, { restartAfter: 1, debugChecks: true }, [{ coords: [0, 0], value: tiles[0] }]);
+        if (restarts.length > 0) runsWithRestarts++;
+
+        // The pinned cell survives every restart.
+        expect(grid.get([0, 0])!.value).toBe(tiles[0]);
+        expectValidSolution(wfc, grid);
+        // Events count restarts in order.
+        expect(restarts.map((r) => r.restarts)).toEqual(restarts.map((_, i) => i + 1));
+      }
+      expect(runsWithRestarts).toBeGreaterThan(0);
+    });
+
+    it("yields a restart step", () => {
+      const grid = new SquareGrid(10, 10);
+      const wfc = new WFC(tiles, grid, { random: seeded(1), restartAfter: 1, logLevel: LogLevel.NONE });
+      const types = new Set([...wfc.execute(undefined, false)].map((step) => step.type));
+      expect(types).toContain("restart");
+      expect(types).toContain("complete");
+    });
+
+    it("never restarts when restartAfter is 0", () => {
+      for (let seed = 1; seed <= 15; seed++) {
+        expect(run(seed, { restartAfter: 0 }).restarts).toEqual([]);
+      }
+    });
+
+    it("can still prove that no solution exists while restarting", () => {
+      // Six mutually adjacent cells can't be coloured with five colours.
+      const wfc = new WFC(colourTiles(5), new CompleteGraphGrid(6), { random: seeded(1), restartAfter: 2, logLevel: LogLevel.NONE });
+      let restarts = 0;
+      wfc.on("restart", () => restarts++);
+      wfc.on("error", () => {});
+
+      expect(() => wfc.start()).toThrow(/^No solution exists/);
+      expect(restarts).toBeGreaterThan(0);
+    });
+
+    it("solves the colourable complete graph while restarting", () => {
+      const grid = new CompleteGraphGrid(5);
+      const wfc = new WFC(colourTiles(5), grid, { random: seeded(1), restartAfter: 1, logLevel: LogLevel.NONE });
+      wfc.start();
+      const names = Array.from(grid.iterate(), ([cell]) => cell.value!.name);
+      expect(new Set(names).size).toBe(5);
+    });
+
+    it("reports restarts when giving up", () => {
+      const wfc = new WFC(colourTiles(5), new CompleteGraphGrid(6), {
+        random: seeded(1),
+        restartAfter: 2,
+        maxRetries: 10,
+        logLevel: LogLevel.NONE,
+      });
+      wfc.on("error", () => {});
+      expect(() => wfc.start()).toThrow(/^Gave up after 10 backtracks \(\d+ restarts\)/);
+    });
+
+    it("rejects a negative restartAfter", () => {
+      expect(() => new WFC(tiles, new SquareGrid(2, 2), { restartAfter: -1 })).toThrow("restartAfter");
     });
   });
 });

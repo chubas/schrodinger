@@ -15,9 +15,22 @@ export enum LogLevel {
 }
 
 export type WFCOptions = {
-  // Maximum number of backtracks before giving up (default 10,000). Giving
-  // up is reported differently from a proven "No solution exists".
+  // Maximum number of backtracks, across all restarts, before giving up
+  // (default 10,000). Giving up is reported differently from a proven
+  // "No solution exists".
   maxRetries?: number;
+  // Start over (undo everything but the initial seed, keep drawing from the
+  // same random source) when an attempt has needed too many backtracks. A
+  // mistake made early in an attempt can make the rest of it hopeless, and
+  // undoing recent choices never fixes that; a fresh attempt usually does.
+  //
+  // This is the unit of the cutoff: attempts are cut off after restartAfter
+  // backtracks times the Luby sequence 1, 1, 2, 1, 1, 2, 4, 1, 1, 2, ...
+  // Mostly short attempts, with ever longer ones now and then, so the search
+  // stays complete (a long enough attempt can prove there is no solution).
+  // Default 25. 0 disables restarts, which makes proving "no solution" on
+  // hard instances several times faster.
+  restartAfter?: number;
   /** @deprecated Ignored; backtracking is a depth-first search limited by maxRetries. */
   backtrackStep?: number;
   random?: RandomLib;
@@ -50,6 +63,7 @@ export type CollapseResult = {
 export type WFCEvents = {
   collapse: (group: CollapseGroup) => void;
   backtrack: (from: CollapseGroup) => void;
+  restart: (info: { restarts: number; backtracks: number }) => void;
   complete: () => void;
   error: (error: Error) => void;
 };
@@ -70,7 +84,7 @@ export const BACKTRACK_STRATEGIES = {
 };
 
 export type StepResult = {
-  type: "collapse" | "backtrack" | "complete";
+  type: "collapse" | "backtrack" | "restart" | "complete";
   // For "backtrack": the decision (cell and tile) that was undone and ruled out.
   group?: CollapseGroup;
   affectedCells?: Cell[];
@@ -79,6 +93,16 @@ export type StepResult = {
 };
 
 const DEFAULT_MAX_BACKTRACKS = 10_000;
+const DEFAULT_RESTART_AFTER = 25;
+
+// The Luby sequence 1, 1, 2, 1, 1, 2, 4, 1, 1, 2, 1, 1, 2, 4, 8, ... (i >= 1).
+// Using it to scale restart cutoffs is within a logarithmic factor of the best
+// fixed cutoff for any problem, without knowing which one that is.
+export function luby(i: number): number {
+  let k = 1;
+  while (2 ** k - 1 < i) k++;
+  return 2 ** k - 1 === i ? 2 ** (k - 1) : luby(i - 2 ** (k - 1) + 1);
+}
 
 const NO_SOLUTION_MESSAGE = "No solution exists - all possibilities exhausted";
 
@@ -94,6 +118,7 @@ export class WFC extends EventEmitter {
   private readonly tileDefs: TileDef[];
   private readonly options: WFCOptions;
   private readonly maxBacktracks: number;
+  private readonly restartAfter: number;
   // Plain TS `private` rather than a native `#` field: at this project's
   // ES2020 build target, TypeScript downlevels `#field` into a WeakMap-backed
   // polyfill, and this field is read many times per adjacency check (the
@@ -118,6 +143,9 @@ export class WFC extends EventEmitter {
     tileDefs.forEach((tileDef, index) => this.tileIndexByName.set(tileDef.name, index));
     this.options = options;
     this.maxBacktracks = options.maxRetries ?? DEFAULT_MAX_BACKTRACKS;
+    this.restartAfter = options.restartAfter ?? DEFAULT_RESTART_AFTER;
+    if (!(this.restartAfter >= 0)) throw new Error("restartAfter must be 0 (no restarts) or a positive number");
+
     this.rng = options.random || new DefaultRandom();
     this.logLevel = options.logLevel ?? LogLevel.WARN;
 
@@ -252,7 +280,13 @@ export class WFC extends EventEmitter {
 
     const propagator = this.activePropagator();
     const decisions: Decision[] = [];
+    // A restart returns to here: after loading, and after the initial seed.
+    const startMarker = propagator.mark();
     let backtracks = 0;
+    let restarts = 0;
+    let attemptBacktracks = 0;
+    const cutoffFor = (attempt: number) => (this.restartAfter > 0 ? this.restartAfter * luby(attempt) : Infinity);
+    let restartCutoff = cutoffFor(1);
 
     try {
       while (!propagator.isComplete()) {
@@ -280,8 +314,23 @@ export class WFC extends EventEmitter {
         for (let depth = 1; ; depth++) {
           if (++backtracks > this.maxBacktracks) {
             throw new Error(
-              `Gave up after ${this.maxBacktracks} backtracks without finding a solution (raise maxRetries to search longer)`,
+              `Gave up after ${this.maxBacktracks} backtracks (${restarts} restarts) without finding a solution ` +
+                "(raise maxRetries to search longer)",
             );
+          }
+
+          // Too many backtracks in this attempt: start over instead.
+          if (++attemptBacktracks > restartCutoff) {
+            propagator.restore(startMarker);
+            this.checkPropagator();
+            decisions.length = 0;
+            attemptBacktracks = 0;
+            restarts++;
+            restartCutoff = cutoffFor(restarts + 1);
+            this.log(LogLevel.DEBUG, `Restart ${restarts} after ${backtracks} backtracks`);
+            if (emitEvents) this.emit("restart", { restarts, backtracks });
+            yield { type: "restart" };
+            break;
           }
 
           propagator.restore(failed.marker);

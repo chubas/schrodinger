@@ -53,9 +53,11 @@ console.log(picture(first) === picture(second) ? '(seed 7 again: identical)\n' :
 const observed = create(7);
 let collapses = 0;
 let backtracks = 0;
+let restarts = 0;
 observed.on('collapse', () => collapses++);
 observed.on('backtrack', () => backtracks++);
-observed.on('complete', () => console.log(`complete: ${collapses} collapses, ${backtracks} backtracks`));
+observed.on('restart', () => restarts++);
+observed.on('complete', () => console.log(`complete: ${collapses} collapses, ${backtracks} backtracks, ${restarts} restarts`));
 observed.start();
 
 // 3. An initial seed pins cells before the search starts.
