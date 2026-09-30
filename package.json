@@ -22,7 +22,7 @@
   "bugs": {
     "url": "https://github.com/chubas/schrodinger/issues"
   },
-  "author": "Rubén Medellín",
+  "author": "Rubén Medellín <ruben.medellin.c@gmail.com>",
   "license": "LGPL-2.1-only",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -88,7 +88,8 @@
     "stress-test:compare": "npm run build:stress-test && bash stress-test/suite.sh compare",
     "prepare": "npm run build",
     "prepublishOnly": "npm test",
-    "check:package": "node scripts/check-package.mjs"
+    "check:package": "node scripts/check-package.mjs",
+    "check:runtime": "node scripts/runtime-check.mjs"
   },
   "dependencies": {
     "parsimmon": "^1.18.1"

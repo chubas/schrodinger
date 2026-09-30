@@ -4,6 +4,7 @@
 // mode, and a browser bundler.
 //
 //   npm run check:package
+//   CHECK_TS_VERSIONS="4.5 5.0 5.9" npm run check:package   # also other TypeScript versions
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync, copyFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -97,6 +98,21 @@ try {
   for (const [resolution, module] of [["node16", "node16"], ["nodenext", "nodenext"], ["bundler", "esnext"], ["node10", "commonjs"]]) {
     check(`TypeScript, moduleResolution ${resolution}`, () =>
       run(bin("tsc"), ["--noEmit", "--strict", "--target", "es2020", "--module", module, "--moduleResolution", resolution, "consumer.ts"]));
+  }
+
+  // Other TypeScript versions, e.g. CHECK_TS_VERSIONS="4.5 4.9 5.0 5.9". Each
+  // version is tried with the module resolution modes it supports: the legacy
+  // mode (called "node" before 5.0), node16/nodenext from 4.7, bundler from 5.0.
+  for (const version of (process.env.CHECK_TS_VERSIONS ?? "").split(/\s+/).filter(Boolean)) {
+    const [major, minor] = version.split(".").map(Number);
+    const at = (maj, min) => major > maj || (major === maj && minor >= min);
+    const modes = [[major >= 5 ? "node10" : "node", "commonjs"]];
+    if (at(4, 7)) modes.push(["node16", "node16"], ["nodenext", "nodenext"]);
+    if (at(5, 0)) modes.push(["bundler", "esnext"]);
+    for (const [resolution, module] of modes) {
+      check(`TypeScript ${version}, moduleResolution ${resolution}`, () =>
+        run("npx", ["-y", "-p", `typescript@${version}`, "tsc", "--noEmit", "--strict", "--target", "es2020", "--module", module, "--moduleResolution", resolution, "consumer.ts"]));
+    }
   }
 
   writeFileSync(join(app, "browser-app.js"), `import { WFC, SquareGrid } from "schrodinger-wfc"; new WFC([{ name: "a", adjacencies: ["x"] }], new SquareGrid(1, 1)).start();`);

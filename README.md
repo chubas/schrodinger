@@ -30,7 +30,9 @@ You describe your tiles and which sides may touch; the engine fills a grid (or a
 npm install schrodinger-wfc
 ```
 
-Works in Node 18+ and in browsers, as ESM (`import { WFC } from 'schrodinger-wfc'`) or CommonJS (`const { WFC } = require('schrodinger-wfc')`), with TypeScript types included. Bundlers (webpack, Vite, esbuild, ...) need no configuration: the main entry doesn't touch Node's `fs`.
+Works in Node 18 or later and in browsers, as ESM (`import { WFC } from 'schrodinger-wfc'`) or CommonJS (`const { WFC } = require('schrodinger-wfc')`), with TypeScript types included (TypeScript 4.5 or later). Bundlers (webpack, Vite, esbuild, ...) need no configuration: the main entry doesn't touch Node's `fs`.
+
+The code is plain ES2020 with no dependency beyond a parser library, so it doesn't need a recent runtime: CI tests Node 18, 20, 22 and 24, and the built package also runs on Node 16. For TypeScript, 4.5 is the oldest version that can read the type declarations; `moduleResolution` `node16`/`nodenext` needs 4.7+ and `bundler` needs 5.0+, which are TypeScript's own requirements.
 
 **In a browser without a bundler**, use the self-contained build, which exposes a `Schrodinger` global:
 
@@ -258,4 +260,6 @@ docs/          grammar and custom grid guides, design notes
 
 ## License
 
-GNU Lesser General Public License v2.1 (LGPL-2.1). See [LICENSE](LICENSE).
+Copyright (C) 2024-2026 Rubén Medellín <ruben.medellin.c@gmail.com>
+
+Licensed under the GNU Lesser General Public License v2.1 (LGPL-2.1). See [LICENSE](LICENSE).

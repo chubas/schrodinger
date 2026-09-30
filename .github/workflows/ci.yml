@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [18, 20, 22]
+        node: [18, 20, 22, 24]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -22,6 +22,8 @@ jobs:
       - run: npm run lint
       - run: npm run build
       - run: npm test
+      # The built package on this Node version (ESM, CommonJS, seeded result).
+      - run: npm run check:runtime
       # The engine's own correctness checks: every produced solution is
       # validated independently of the engine, and with --check-invariants the
       # propagation state is recomputed from scratch after every step.
@@ -43,5 +45,8 @@ jobs:
           cache: npm
       - run: npm ci
       # Packs the library and uses the tarball as a consumer would (ESM, CJS,
-      # TypeScript, the browser bundle, a browser bundler).
+      # TypeScript, the browser bundle, a browser bundler), with the TypeScript
+      # versions we support: 4.5 is the oldest that can read the declarations.
       - run: npm run check:package
+        env:
+          CHECK_TS_VERSIONS: "4.5 4.7 4.9 5.0 5.4 5.9"

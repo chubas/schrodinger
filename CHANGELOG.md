@@ -16,6 +16,7 @@ First public version.
 - Events (`collapse`, `backtrack`, `restart`, `complete`, `error`) and a step-by-step generator (`execute()`), both typed. The engine has its own small event emitter, so it works the same in Node and browsers.
 - TypeScript types: coordinates are typed by the grid, and event listeners are type-checked.
 - `TilesetImporter` (Node only, from `schrodinger-wfc/node`) loads tiles from JSON.
+- Supported environments: Node 18 or later (the built package also runs on Node 16), TypeScript 4.5 or later, and current browsers. CI tests Node 18, 20, 22 and 24 and TypeScript 4.5 to 5.9.
 - Packaging: ESM and CommonJS builds with types, and self-contained browser builds (`dist/index.global.js`, `dist/index.global.min.js`) exposing a `Schrodinger` global, for script tags and CDNs.
 
 ### Known gaps

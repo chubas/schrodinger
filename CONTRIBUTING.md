@@ -11,7 +11,9 @@ npm install        # also builds dist/ (the `prepare` script)
 npm test
 ```
 
-Node 18 or later.
+Node 18 or later for development (the tooling needs it). The built package runs on older Node too; `npm run check:runtime` tests the built `dist/` on whichever Node you run it with, and CI runs it on 18, 20, 22 and 24.
+
+The library is plain ES2020 with one runtime dependency. Please don't use newer runtime APIs or syntax in `src/` without a reason (check `npm run check:runtime` on an old Node), and keep the type declarations readable by TypeScript 4.5 (`CHECK_TS_VERSIONS="4.5 5.9" npm run check:package`).
 
 ## Everyday commands
 
@@ -22,6 +24,7 @@ Node 18 or later.
 | `npm run lint` / `npm run lint:fix` | eslint + prettier check / fix |
 | `npm run stress-test` | 1000 seeds on the isometric tileset; `--help` lists options |
 | `npm run check:package` | packs the library and uses the tarball as a consumer would |
+| `npm run check:runtime` | smoke-tests the built `dist/` on the Node you're running |
 
 Formatting is prettier's (`.prettierrc`); `npm run lint:fix` does it for you.
 
