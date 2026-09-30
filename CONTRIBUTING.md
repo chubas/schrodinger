@@ -2,6 +2,8 @@
 
 Thanks for wanting to help. This is a small library, so the process is light.
 
+Everyone taking part is expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## Setup
 
 ```bash

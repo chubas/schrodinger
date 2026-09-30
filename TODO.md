@@ -21,6 +21,6 @@ Roughly in order of how much they matter for users. See also the open items in
 ## Project
 
 - **Publish** (deferred until it has been used in real projects, or there is outside feedback): create the npm package (`npm publish`), then confirm the README's install command and CDN URL work, and date the `0.1.0` changelog entry. The package is configured (name, `exports`, `files`, `prepare`, CI, `npm run check:package`); publishing itself needs your npm account.
-- **Code of conduct and security policy:** not included. Worth adding before inviting contributions; GitHub's Community Standards page inserts the Contributor Covenant and a `SECURITY.md` template.
+- **Security policy:** there is no `SECURITY.md`; GitHub's Community Standards page offers a template.
 - `benchmark/` still uses a synthetic tileset where every tile matches every other; `stress-test/` is the more meaningful measurement.
 - More tileset examples (a Wang-tile set, a Tiled-format importer, rules using the full grammar).
