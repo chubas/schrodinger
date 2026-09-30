@@ -108,14 +108,14 @@ describe('PrecomputedAdjacencies', () => {
       expect(precomputed.A).toHaveProperty('down');
       
       // Check specific adjacencies for up triangles
-      expect(precomputed.A.up[0]).toContain('A'); // topLeft
-      expect(precomputed.A.up[1]).toContain('A'); // topRight
-      expect(precomputed.A.up[2]).toContain('A'); // bottom
+      expect(precomputed.A.up[0]).toContain('A'); // left
+      expect(precomputed.A.up[1]).toContain('A'); // right
+      expect(precomputed.A.up[2]).toContain('A'); // below
       
       // Check specific adjacencies for down triangles
-      expect(precomputed.A.down[0]).toContain('A'); // bottomLeft
-      expect(precomputed.A.down[1]).toContain('A'); // bottomRight
-      expect(precomputed.A.down[2]).toContain('A'); // top
+      expect(precomputed.A.down[0]).toContain('A'); // left
+      expect(precomputed.A.down[1]).toContain('A'); // right
+      expect(precomputed.A.down[2]).toContain('A'); // above
     });
   });
   

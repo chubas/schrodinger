@@ -7,7 +7,8 @@ Runnable scripts, each a few dozen lines. They import the built package from `di
 ```bash
 npm run build
 node examples/node/quickstart.mjs      # random pipe layout; the README's first example
-node examples/node/variants.mjs        # generating rotated/mirrored tiles yourself
+node examples/node/variants.mjs        # generating rotated/mirrored tiles yourself, the short way
+node examples/node/symmetry.mjs        # a reusable version: symmetries as data, square and hex, mirrors, rule hook, draw
 node examples/node/control.mjs         # seeded RNG, initial seed, events, generator, errors
 node examples/node/custom-graph.mjs    # a Grid that isn't a grid: a binary tree, two-coloured
 ```

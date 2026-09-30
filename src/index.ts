@@ -4,7 +4,7 @@
 
 // Core components
 export { WFC, LogLevel } from "./WFC.js";
-export { SquareGrid, HexagonalGrid, CubeGrid } from "./Grid.js";
+export { SquareGrid, TriangularGrid, HexagonalGrid, CubeGrid } from "./Grid.js";
 export { TileDef, TileDefFactory } from "./TileDef.js";
 export { RandomLib, DefaultRandom } from "./RandomLib.js";
 export { AdjacencyPrecomputer } from "./PrecomputedAdjacencies.js";

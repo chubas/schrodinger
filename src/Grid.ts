@@ -152,15 +152,30 @@ export class SquareGrid implements Grid<[number, number]> {
   }
 }
 
+/**
+ * A grid of triangles in `height` rows of `width` triangles. Triangles in a row
+ * alternate: the one at `[x, y]` points up when x + y is even and down when it is
+ * odd. Each triangle has three neighbours, in this direction order:
+ *
+ *   0: left    [x - 1, y]
+ *   1: right   [x + 1, y]
+ *   2: vertical: the triangle below for an up-pointing one ([x, y + 1]),
+ *      above for a down-pointing one ([x, y - 1])
+ *
+ * The cell types are "up" and "down", so tiles can be given different rules
+ * for the two orientations.
+ */
 export class TriangularGrid implements Grid<[number, number]> {
   private cells: Cell<[number, number]>[];
   private width: number;
   private height: number;
 
   // Define adjacency maps for triangular grids
+  // My left neighbour sees me on its right (1), my right neighbour on its left
+  // (0), and the vertical neighbour sees me on its vertical side (2).
   adjacencyMaps: Record<string, number[]> = {
-    up: [2, 2, 0], // [topLeft, topRight, bottom] -> [bottom, bottom, topLeft]
-    down: [0, 0, 2], // [bottomLeft, bottomRight, top] -> [topLeft, topRight, bottom]
+    up: [1, 0, 2],
+    down: [1, 0, 2],
   };
 
   constructor(width: number, height: number, cells?: Cell<[number, number]>[]) {
@@ -226,15 +241,8 @@ export class TriangularGrid implements Grid<[number, number]> {
 
   getNeighbors(coords: [number, number]): (Cell<[number, number]> | null)[] {
     const [x, y] = coords;
-    const isPointingUp = this.getAdjacencyType(coords) === "up";
-
-    if (isPointingUp) {
-      // Order: topLeft, topRight, bottom
-      return [this.get([x - 1, y - 1]), this.get([x + 1, y - 1]), this.get([x, y + 1])];
-    } else {
-      // Order: bottomLeft, bottomRight, top
-      return [this.get([x - 1, y + 1]), this.get([x + 1, y + 1]), this.get([x, y - 1])];
-    }
+    const vertical = this.getAdjacencyType(coords) === "up" ? y + 1 : y - 1;
+    return [this.get([x - 1, y]), this.get([x + 1, y]), this.get([x, vertical])];
   }
 
   get([x, y]: [number, number]): Cell<[number, number]> | null {

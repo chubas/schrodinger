@@ -8,7 +8,7 @@ First public version.
 
 ### Features
 
-- Wave Function Collapse engine for any grid or graph: `SquareGrid`, `HexagonalGrid` and `CubeGrid` are built in, and a custom grid is five members (`iterate`, `get`, `getNeighbors`, `getAdjacencyType`, `adjacencyMaps`).
+- Wave Function Collapse engine for any grid or graph: `SquareGrid`, `TriangularGrid`, `HexagonalGrid` and `CubeGrid` are built in, and a custom grid is five members (`iterate`, `get`, `getNeighbors`, `getAdjacencyType`, `adjacencyMaps`).
 - Adjacency rules with choice (`a|b`), negation (`^a`), combinations (`a+b`) and directional "must differ" rules (`[a>b]`), parsed from strings or given as rule objects.
 - Incremental constraint propagation (support counting) with an undo log, so taking and restoring a snapshot is cheap.
 - Complete depth-first backtracking with Luby-scaled restarts: it finds a solution whenever one exists, or proves that none does, within a configurable budget (`maxRetries`, `restartAfter`). Running out of budget is reported separately ("Gave up") from a proof ("No solution exists").
@@ -21,4 +21,4 @@ First public version.
 
 ### Known gaps
 
-See [TODO.md](TODO.md): rotations and reflections are not generated for you, there is no boundary wrapping, and very large grids with tightly constrained tilesets can be slow.
+See [TODO.md](TODO.md): rotations and reflections are generated in your own code (examples show how), there is no boundary wrapping, and very large grids with tightly constrained tilesets can be slow.

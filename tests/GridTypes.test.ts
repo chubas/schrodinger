@@ -53,51 +53,35 @@ describe('Grid Types', () => {
       expect(grid.getAdjacencyType([0, 1])).toBe('down');
     });
 
-    it('should return correct adjacency map for each type', () => {
+    it('should return the same adjacency map for both orientations', () => {
       const grid = new TriangularGrid(3, 3);
-      // Up-pointing triangle
-      const upMap = grid.getAdjacencyMap([0, 0]);
-      expect(upMap).toEqual([2, 2, 0]);
-      
-      // Down-pointing triangle
-      const downMap = grid.getAdjacencyMap([0, 1]);
-      expect(downMap).toEqual([0, 0, 2]);
+      // left faces right, right faces left, the vertical side faces the vertical side
+      expect(grid.getAdjacencyMap([0, 0])).toEqual([1, 0, 2]);
+      expect(grid.getAdjacencyMap([0, 1])).toEqual([1, 0, 2]);
     });
 
-    it('should get neighbors in correct order for up-pointing triangles', () => {
+    it('should get neighbors in order left, right, below for up-pointing triangles', () => {
       const grid = new TriangularGrid(5, 5);
-      
-      // Set values to check neighbor order for up-pointing triangle at [1, 1]
-      grid.set([1, 1], { choices: [], collapsed: true, forbidden: [], coords: [1, 1] }); // center
-      grid.set([0, 0], { choices: [], collapsed: true, forbidden: [], coords: [0, 0] }); // top-left
-      grid.set([2, 0], { choices: [], collapsed: true, forbidden: [], coords: [2, 0] }); // top-right
-      grid.set([1, 2], { choices: [], collapsed: true, forbidden: [], coords: [1, 2] }); // bottom
-      
-      const neighbors = grid.getNeighbors([1, 1]);
-      expect(neighbors.length).toBe(3);
-      expect(neighbors[0]?.coords).toEqual([0, 0]); // top-left
-      expect(neighbors[1]?.coords).toEqual([2, 0]); // top-right
-      expect(neighbors[2]?.coords).toEqual([1, 2]); // bottom
+      expect(grid.getAdjacencyType([2, 2])).toBe('up');
+      const neighbors = grid.getNeighbors([2, 2]);
+      expect(neighbors.map((n) => n?.coords)).toEqual([[1, 2], [3, 2], [2, 3]]);
     });
 
-    it('should get neighbors in correct order for down-pointing triangles', () => {
+    it('should get neighbors in order left, right, above for down-pointing triangles', () => {
       const grid = new TriangularGrid(5, 5);
-      
-      // Use [1, 2] which should be a down-pointing triangle (odd sum)
-      // For a down-pointing triangle, the neighbors are:
-      // - bottomLeft: [x-1, y+1]
-      // - bottomRight: [x+1, y+1]
-      // - top: [x, y-1]
-      grid.set([1, 2], { choices: [], collapsed: true, forbidden: [], coords: [1, 2] }); // center
-      grid.set([0, 3], { choices: [], collapsed: true, forbidden: [], coords: [0, 3] }); // bottomLeft
-      grid.set([2, 3], { choices: [], collapsed: true, forbidden: [], coords: [2, 3] }); // bottomRight
-      grid.set([1, 1], { choices: [], collapsed: true, forbidden: [], coords: [1, 1] }); // top
-      
-      const neighbors = grid.getNeighbors([1, 2]);
-      expect(neighbors.length).toBe(3);
-      expect(neighbors[0]?.coords).toEqual([0, 3]); // bottomLeft
-      expect(neighbors[1]?.coords).toEqual([2, 3]); // bottomRight
-      expect(neighbors[2]?.coords).toEqual([1, 1]); // top
+      expect(grid.getAdjacencyType([2, 3])).toBe('down');
+      const neighbors = grid.getNeighbors([2, 3]);
+      expect(neighbors.map((n) => n?.coords)).toEqual([[1, 3], [3, 3], [2, 2]]);
+    });
+
+    it('should have no neighbor past the edges', () => {
+      const grid = new TriangularGrid(3, 3);
+      // [0, 0] points up: nothing to its left; [2, 2] points up: nothing to its right or below
+      expect(grid.getNeighbors([0, 0])[0]).toBeNull();
+      expect(grid.getNeighbors([2, 2])[1]).toBeNull();
+      expect(grid.getNeighbors([2, 2])[2]).toBeNull();
+      // [1, 0] points down: nothing above
+      expect(grid.getNeighbors([1, 0])[2]).toBeNull();
     });
   });
 

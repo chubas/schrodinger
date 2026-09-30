@@ -19,6 +19,7 @@ What "direction 0" means is entirely up to the grid. The built-in grids use:
 | `SquareGrid(width, height)` | top, right, bottom, left (y grows downwards) | `[x, y]` |
 | `HexagonalGrid(width, height)` | north, north-east, south-east, south, south-west, north-west | axial `[q, r]` |
 | `CubeGrid(width, height, depth)` | +x, -x, +y, -y, +z, -z | `[x, y, z]` |
+| `TriangularGrid(width, height)` | left, right, below (up-pointing) or above (down-pointing) | `[x, y]` |
 
 ## The contract
 
@@ -85,7 +86,7 @@ function checkGrid(grid) {
 }
 ```
 
-(This found that the `TriangularGrid` class in `src/Grid.ts` is wrong: most of its neighbour pairs don't face back. It isn't exported until it is fixed.)
+(`tests/GridConsistency.test.ts` runs this check on every built-in grid. It once found that an earlier `TriangularGrid` was wrong: most of its neighbour pairs didn't face back.)
 
 ## Tiles for your grid
 

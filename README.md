@@ -94,6 +94,9 @@ A tile's `adjacencies` array has one rule per **direction** of the grid, in the 
 | `new SquareGrid(width, height)` | top, right, bottom, left | `[x, y]` |
 | `new HexagonalGrid(width, height)` | north, north-east, south-east, south, south-west, north-west | axial `[q, r]` |
 | `new CubeGrid(width, height, depth)` | +x, -x, +y, -y, +z, -z | `[x, y, z]` |
+| `new TriangularGrid(width, height)` | left, right, and below (up-pointing) or above (down-pointing) | `[x, y]` |
+
+In a `TriangularGrid` the triangle at `[x, y]` points up when `x + y` is even and down when it is odd (adjacency types `up` and `down`, so tiles can have different rules for each).
 
 Two tiles are compatible across an edge when the rule on one tile's side *matches* the rule on the facing side of the other. With plain strings that means equal strings. A cell with no neighbour in some direction (the edge of the grid) is unconstrained there.
 
@@ -103,7 +106,9 @@ A side can be more than a label. `adjacencies: ['grass', 'water|sand', '^rock', 
 
 ### Rotations and reflections
 
-The engine doesn't generate rotated or mirrored tiles for you. Tiles are plain data, so you generate the variants you need and pass them all in:
+The engine deliberately doesn't generate rotated or mirrored tiles. Those are operations on a grid's directions, and often on your edge rules as well: a mirror turns `[a>b]` into `[b>a]`, a triangle turned 60° changes orientation, a label may encode which way it reads. Only you know what they mean for your tiles, so tiles are plain data and you generate the variants you want and pass them all in.
+
+For a square grid that can be a few lines:
 
 ```js
 // SquareGrid sides are [top, right, bottom, left].
@@ -117,7 +122,7 @@ const corners = [0, 1, 2, 3].map((turns) => ({
 }));
 ```
 
-[`examples/node/variants.mjs`](examples/node/variants.mjs) builds a full tileset this way, dropping duplicate variants (a straight pipe only has two distinct rotations). `TileDef` has `rotation` and `reflection` fields, but they are just metadata: nothing is generated from them yet.
+[`examples/node/variants.mjs`](examples/node/variants.mjs) builds a full tileset this way. [`examples/node/symmetry.mjs`](examples/node/symmetry.mjs) shows one more general way to do it, which you can copy and adapt: a grid's symmetries are data (permutations of its sides, given for square and hexagonal grids), a `variants(tile, symmetry)` helper generates the distinct rotations and optional mirrors, a `mapRule` hook transforms rules that mirroring changes, the tile's weight is split between its variants, and each variant's `draw` is wrapped to draw the transformed picture. It is one possible design, not an API of the library; if your tiles need something different, change it. (`TileDef` has `rotation` and `reflection` fields, but they are only metadata: nothing is generated from them.)
 
 ## Controlling a run
 
@@ -198,7 +203,7 @@ An invalid starting configuration ("Initial seed creates an impossible state") f
 
 ## Custom grids
 
-`SquareGrid`, `HexagonalGrid` and `CubeGrid` are built in, but a grid is just five members (`iterate`, `get`, `getNeighbors`, `getAdjacencyType`, `adjacencyMaps`), so you can supply your own for any topology: hex maps in other coordinate systems, tori, meshes, graphs. [docs/custom-grids.md](docs/custom-grids.md) is the guide, and [`examples/node/custom-graph.mjs`](examples/node/custom-graph.mjs) two-colours a binary tree.
+`SquareGrid`, `TriangularGrid`, `HexagonalGrid` and `CubeGrid` are built in, but a grid is just five members (`iterate`, `get`, `getNeighbors`, `getAdjacencyType`, `adjacencyMaps`), so you can supply your own for any topology: hex maps in other coordinate systems, tori, meshes, graphs. [docs/custom-grids.md](docs/custom-grids.md) is the guide, and [`examples/node/custom-graph.mjs`](examples/node/custom-graph.mjs) two-colours a binary tree.
 
 ## Other APIs
 
@@ -230,8 +235,7 @@ Comparing tile rules and building the lookup tables (a few milliseconds for 90 t
 
 - **Very large grids with tightly constrained tilesets are slow.** Restarts make them finish (80×80 above), but each restart repeats work, so they can take seconds. A search that learns why it failed (backjumping) would waste less; see [TODO.md](TODO.md).
 - **Proving that no solution exists can take longer with restarts on**, because it needs one attempt long enough to exhaust the search. On colouring complete graphs with too few colours it took 6.6×, 11× and 15× the backtracks of plain search for proofs that need 719, 5,039 and 40,319 backtracks; proofs that need fewer than 25 are unaffected. Set `restartAfter: 0` if you mostly need that.
-- **Rotations, reflections and boundary wrapping aren't built in** (see above and [TODO.md](TODO.md)).
-- **`TriangularGrid`** exists in the source but isn't exported: its neighbour relation is wrong.
+- **Rotations and reflections are generated in your own code, by design** (see above), and there is no boundary wrapping yet (see [TODO.md](TODO.md)).
 - Everything else known is in [TODO.md](TODO.md).
 
 ## Development
