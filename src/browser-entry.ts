@@ -30,6 +30,6 @@ export type {
   WFCOptions,
   CellCollapse,
   CollapseGroup,
-  CollapseResult,
+  StepResult,
   WFCEvents
 } from "./WFC.js";

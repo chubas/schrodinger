@@ -22,7 +22,7 @@ What "direction 0" means is entirely up to the grid. The built-in grids use:
 
 ## The contract
 
-The TypeScript `Grid<Coords>` interface lists ten members, but the engine currently calls only these five:
+The `Grid<Coords>` interface has exactly these five members:
 
 ```ts
 interface Grid<Coords> {
@@ -34,19 +34,17 @@ interface Grid<Coords> {
 }
 ```
 
-(`set`, `getCells`, `clone`, `toSnapshot` and `getAdjacencyMap` are still required by the interface, so TypeScript implementations need them, but plain JavaScript grids can omit them.)
-
 ### Cells
 
 A cell is a plain object; the engine stores its state on it and **mutates it in place**:
 
 ```ts
-{ coords, choices: TileDef[], collapsed: boolean, forbidden: TileDef[], value?: TileDef }
+{ coords, choices: TileDef[], collapsed: boolean, value?: TileDef }
 ```
 
 - `iterate()`, `get()` and `getNeighbors()` must all return **the same cell objects**, every time. Don't create cells lazily or replace them (`set`) while a run is in progress.
 - `cell.coords` should be the coordinates `iterate()` yields for it: events report `cell.coords`.
-- After a run, each cell has `collapsed === true` and `value` set to its tile. `choices` holds what is still possible (during a run), and `forbidden` is unused.
+- After a run, each cell has `collapsed === true` and `value` set to its tile. `choices` holds what is still possible (during a run).
 
 ### `getNeighbors(coords)`
 
@@ -102,4 +100,4 @@ wfc.start();
 for (const [cell, coords] of wfc.iterate()) { /* cell.value is the chosen tile */ }
 ```
 
-The initial-seed argument of `start()`/`execute()` takes `{ coords, value }`, where `coords` is whatever your `get()` accepts. (The TypeScript types for seeds and events currently declare `coords` as `[number, number]`, so grids with other coordinate shapes need a cast there.)
+The initial-seed argument of `start()`/`execute()` takes `{ coords, value }`, where `coords` is whatever your `get()` accepts. In TypeScript, `new WFC(tiles, grid)` takes its coordinate type from the grid (`Grid<Coords>`), so seeds and events are typed to match.

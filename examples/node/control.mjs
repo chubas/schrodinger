@@ -14,27 +14,10 @@ const tiles = [
   tile('┘', ['1', '0', '0', '1']),
 ];
 
-// A seedable RNG is any object with random() and setSeed(). This is
-// mulberry32, a tiny deterministic generator; any seedable PRNG works
-// (for example the `seedrandom` package).
-function seededRandom(seed) {
-  let state = seed >>> 0;
-  return {
-    random() {
-      state = (state + 0x6d2b79f5) >>> 0;
-      let t = Math.imul(state ^ (state >>> 15), 1 | state);
-      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    },
-    setSeed(newSeed) {
-      state = newSeed >>> 0;
-    },
-  };
-}
-
 const WIDTH = 16;
 const HEIGHT = 4;
-const create = (seed) => new WFC(tiles, new SquareGrid(WIDTH, HEIGHT), { random: seededRandom(seed) });
+// The `seed` option makes a run repeatable. (You can also pass your own `random` source.)
+const create = (seed) => new WFC(tiles, new SquareGrid(WIDTH, HEIGHT), { seed });
 const picture = (wfc) => {
   const rows = Array.from({ length: HEIGHT }, () => '');
   for (const [cell, [, y]] of wfc.iterate()) rows[y] += cell.value.name;

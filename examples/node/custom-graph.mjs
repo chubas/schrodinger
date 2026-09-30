@@ -16,7 +16,6 @@ class BinaryTreeGrid {
       coords: [i], // coordinates can be any value; here, [node index]
       choices: [],
       collapsed: false,
-      forbidden: [],
     }));
 
     // adjacencyMaps[type][d] answers: "if I look at my neighbour in direction d,

@@ -33,7 +33,12 @@ export type WFCOptions = {
   restartAfter?: number;
   /** @deprecated Ignored; backtracking is a depth-first search limited by maxRetries. */
   backtrackStep?: number;
+  // The random source. Defaults to DefaultRandom (Math.random, or a
+  // deterministic generator once seeded).
   random?: RandomLib;
+  // Passed to random.setSeed() so the run is repeatable: the same tiles, grid,
+  // options and seed always give the same result.
+  seed?: string | number;
   logLevel?: LogLevel;
   /** @deprecated Ignored; backtracking is a depth-first search limited by maxRetries. */
   backtrackStrategy?: BacktrackStrategy;
@@ -43,26 +48,22 @@ export type WFCOptions = {
   debugChecks?: boolean;
 };
 
-export type CellCollapse = {
-  coords: [number, number];
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type CellCollapse<Coords = any> = {
+  coords: Coords;
   value?: TileDef; // If undefined, will pick based on entropy
 };
 
-export type CollapseGroup = {
-  cells: CellCollapse[];
-  cause: "initial" | "entropy" | "propagation";
-  maxAttempts?: number; // Optional limit for retries at this level
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type CollapseGroup<Coords = any> = {
+  cells: CellCollapse<Coords>[];
+  cause: "initial" | "entropy";
 };
 
-export type CollapseResult = {
-  success: boolean;
-  affectedCells: Cell[];
-  propagatedCollapses?: CollapseGroup[];
-};
-
-export type WFCEvents = {
-  collapse: (group: CollapseGroup) => void;
-  backtrack: (from: CollapseGroup) => void;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type WFCEvents<Coords = any> = {
+  collapse: (group: CollapseGroup<Coords>) => void;
+  backtrack: (from: CollapseGroup<Coords>) => void;
   restart: (info: { restarts: number; backtracks: number }) => void;
   complete: () => void;
   error: (error: Error) => void;
@@ -83,11 +84,12 @@ export const BACKTRACK_STRATEGIES = {
   deep: { name: 'deep', maxLevels: 10, exhaustionPolicy: 'deferred' as const, cleanupFrequency: 25 }
 };
 
-export type StepResult = {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type StepResult<Coords = any> = {
   type: "collapse" | "backtrack" | "restart" | "complete";
   // For "backtrack": the decision (cell and tile) that was undone and ruled out.
-  group?: CollapseGroup;
-  affectedCells?: Cell[];
+  group?: CollapseGroup<Coords>;
+  affectedCells?: Cell<Coords>[];
   // For "backtrack": how many decisions this backtrack has undone so far.
   depth?: number;
 };
@@ -108,13 +110,14 @@ const NO_SOLUTION_MESSAGE = "No solution exists - all possibilities exhausted";
 
 // A tile chosen for a cell, and the trail position from just before it was
 // applied (so it can be undone).
-type Decision = {
-  cell: Cell;
+type Decision<Coords> = {
+  cell: Cell<Coords>;
   tile: TileDef;
   marker: number;
 };
 
-export class WFC extends EventEmitter {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export class WFC<Coords = any> extends EventEmitter {
   private readonly tileDefs: TileDef[];
   private readonly options: WFCOptions;
   private readonly maxBacktracks: number;
@@ -124,7 +127,7 @@ export class WFC extends EventEmitter {
   // polyfill, and this field is read many times per adjacency check (the
   // hottest path in the engine) - profiling showed that indirection alone
   // accounting for ~38% of total runtime.
-  private grid: Grid;
+  private grid: Grid<Coords>;
   private readonly rng: RandomLib;
   private readonly logLevel: LogLevel;
   private precomputedAdjacencies?: PrecomputedAdjacencies;
@@ -136,7 +139,7 @@ export class WFC extends EventEmitter {
   // grid's Cell objects mirror.
   private propagator?: SupportPropagator;
 
-  constructor(tileDefs: TileDef[], grid: Grid, options: WFCOptions = {}) {
+  constructor(tileDefs: TileDef[], grid: Grid<Coords>, options: WFCOptions = {}) {
     super();
     this.tileDefs = tileDefs;
     this.grid = grid;
@@ -147,6 +150,7 @@ export class WFC extends EventEmitter {
     if (!(this.restartAfter >= 0)) throw new Error("restartAfter must be 0 (no restarts) or a positive number");
 
     this.rng = options.random || new DefaultRandom();
+    if (options.seed !== undefined) this.rng.setSeed(options.seed);
     this.logLevel = options.logLevel ?? LogLevel.WARN;
 
     this.validateTileDefs(tileDefs);
@@ -245,7 +249,17 @@ export class WFC extends EventEmitter {
     return true;
   }
 
-  start(initialSeed?: CellCollapse[]): void {
+  // EventEmitter's on/once, narrowed to this engine's events so that listeners
+  // are type-checked (WFCEvents lists them).
+  on<E extends keyof WFCEvents<Coords>>(event: E, listener: WFCEvents<Coords>[E]): this {
+    return super.on(event, listener);
+  }
+
+  once<E extends keyof WFCEvents<Coords>>(event: E, listener: WFCEvents<Coords>[E]): this {
+    return super.once(event, listener);
+  }
+
+  start(initialSeed?: CellCollapse<Coords>[]): void {
     const generator = this.execute(initialSeed);
     let result = generator.next();
     while (!result.done) {
@@ -253,7 +267,7 @@ export class WFC extends EventEmitter {
     }
   }
 
-  *execute(initialSeed?: CellCollapse[], emitEvents: boolean = true): Generator<StepResult, void, unknown> {
+  *execute(initialSeed?: CellCollapse<Coords>[], emitEvents: boolean = true): Generator<StepResult<Coords>, void, unknown> {
     this.log(LogLevel.INFO, "Starting WFC execution");
 
     // Loading also removes tiles that have no compatible tile in some
@@ -273,13 +287,13 @@ export class WFC extends EventEmitter {
       if (!seeded) {
         throw this.failure("Initial seed creates an impossible state", emitEvents);
       }
-      const group: CollapseGroup = { cells: seeded, cause: "initial" };
+      const group: CollapseGroup<Coords> = { cells: seeded, cause: "initial" };
       if (emitEvents) this.emit("collapse", group);
       yield { type: "collapse", group, affectedCells: seeded.map((c) => this.grid.get(c.coords)!) };
     }
 
     const propagator = this.activePropagator();
-    const decisions: Decision[] = [];
+    const decisions: Decision<Coords>[] = [];
     // A restart returns to here: after loading, and after the initial seed.
     const startMarker = propagator.mark();
     let backtracks = 0;
@@ -300,7 +314,7 @@ export class WFC extends EventEmitter {
 
         if (consistent) {
           decisions.push({ cell, tile, marker });
-          const group: CollapseGroup = { cells: [{ coords: cell.coords, value: tile }], cause: "entropy" };
+          const group: CollapseGroup<Coords> = { cells: [{ coords: cell.coords, value: tile }], cause: "entropy" };
           if (emitEvents) this.emit("collapse", group);
           yield { type: "collapse", group, affectedCells: [cell] };
           continue;
@@ -310,7 +324,7 @@ export class WFC extends EventEmitter {
         // tile out for that cell. If that also leads to a contradiction, the
         // previous decision was wrong too: undo it and rule out its tile, and
         // so on. Running out of decisions proves there is no solution.
-        let failed: Decision = { cell, tile, marker };
+        let failed: Decision<Coords> = { cell, tile, marker };
         for (let depth = 1; ; depth++) {
           if (++backtracks > this.maxBacktracks) {
             throw new Error(
@@ -339,7 +353,7 @@ export class WFC extends EventEmitter {
           this.checkPropagator();
 
           this.log(LogLevel.DEBUG, `Backtrack: ruled out ${failed.tile.name} at ${failed.cell.coords}`);
-          const group: CollapseGroup = {
+          const group: CollapseGroup<Coords> = {
             cells: [{ coords: failed.cell.coords, value: failed.tile }],
             cause: "entropy",
           };
@@ -353,7 +367,7 @@ export class WFC extends EventEmitter {
         }
       }
     } catch (error) {
-      this.log(LogLevel.ERROR, "WFC execution failed:", error);
+      this.log(LogLevel.ERROR, `WFC execution failed: ${error instanceof Error ? error.message : error}`);
       if (emitEvents) this.emit("error", error);
       throw error;
     }
@@ -366,9 +380,9 @@ export class WFC extends EventEmitter {
   // Collapses every seeded cell, then propagates once, so seeded cells are
   // also checked against each other. Returns the applied collapses, or
   // undefined on contradiction.
-  private applySeed(initialSeed: CellCollapse[]): CellCollapse[] | undefined {
+  private applySeed(initialSeed: CellCollapse<Coords>[]): CellCollapse<Coords>[] | undefined {
     const propagator = this.activePropagator();
-    const applied: CellCollapse[] = [];
+    const applied: CellCollapse<Coords>[] = [];
     for (const { coords, value } of initialSeed) {
       const cell = this.grid.get(coords);
       if (!cell) continue;
@@ -385,7 +399,7 @@ export class WFC extends EventEmitter {
   // as failures inside it: logged, emitted as "error", then thrown.
   private failure(message: string, emitEvents: boolean): Error {
     const error = new Error(message);
-    this.log(LogLevel.ERROR, "WFC execution failed:", error);
+    this.log(LogLevel.ERROR, `WFC execution failed: ${message}`);
     if (emitEvents) this.emit("error", error);
     return error;
   }
@@ -407,7 +421,7 @@ export class WFC extends EventEmitter {
   }
 
   // Checks if two tiles can be adjacent in the given direction
-  canBeAdjacent(tile1: TileDef, coords: [number, number], direction: number, tile2: TileDef): boolean {
+  canBeAdjacent(tile1: TileDef, coords: Coords, direction: number, tile2: TileDef): boolean {
     const t1 = this.tileIndexByName.get(tile1.name);
     const t2 = this.tileIndexByName.get(tile2.name);
     if (t1 === undefined || t2 === undefined) return false;
@@ -418,7 +432,7 @@ export class WFC extends EventEmitter {
   }
 
   // Public method to safely iterate over the current grid state
-  iterate(): IterableIterator<[Cell, [number, number]]> {
+  iterate(): IterableIterator<[Cell<Coords>, Coords]> {
     return this.grid.iterate();
   }
 

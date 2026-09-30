@@ -30,6 +30,5 @@ export default defineConfig([
     },
     // Mark Node.js-specific modules and browser-provided modules as external
     external: ['events', 'fs', 'path'],
-    noExternal: ['seedrandom'],
   }
 ]);

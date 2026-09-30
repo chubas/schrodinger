@@ -75,7 +75,7 @@ console.log(rows.join('\n'));
 
 This is [`examples/node/quickstart.mjs`](examples/node/quickstart.mjs). After `start()` returns, every cell has `collapsed === true` and `cell.value` is its tile.
 
-In TypeScript, `TileDef` also requires a `draw` function (it's for your renderer; the engine never calls it), so write `draw: () => {}` if you don't need one.
+In TypeScript the same tiles are typed `TileDef[]`. `TileDef` also has an optional `draw` function for your renderer's convenience; the engine never calls it. Coordinates are typed by the grid (`[number, number]` for `SquareGrid`, `[number, number, number]` for `CubeGrid`, and so on), and event listeners are type-checked.
 
 ## Tiles and grids
 
@@ -131,19 +131,22 @@ for (const step of wfc.execute()) {} // the same run, one step at a time
 
 **`execute()` is a generator** yielding `{ type: 'collapse' | 'backtrack' | 'restart' | 'complete', group, affectedCells, depth }` after each step (after a `restart` every cell except the initial ones is uncollapsed again), which is how the browser demos animate one collapse per frame. See [docs/generator-functionality.md](docs/generator-functionality.md).
 
-**Reproducibility.** The engine takes a random source with `random()` and `setSeed()` (by default `Math.random`, which ignores seeds). Pass a seedable one to make runs repeatable:
+**Reproducibility.** Pass a `seed` (a number or a string) and the same tiles, grid, options and seed always give the same result, on every platform:
 
 ```js
-const wfc = new WFC(tiles, grid, { random: mySeededRandom(42) });
+const wfc = new WFC(tiles, grid, { seed: 42 });
 ```
 
-[`examples/node/control.mjs`](examples/node/control.mjs) has a complete, working version of everything in this section, including a small seedable generator.
+Without a seed the engine uses `Math.random()`. To use your own generator, pass `random`, an object with `random()` (a number in [0, 1)) and `setSeed()`; the `seed` option is handed to its `setSeed()`.
+
+[`examples/node/control.mjs`](examples/node/control.mjs) has a complete, working version of everything in this section.
 
 ### Options
 
 ```js
 new WFC(tiles, grid, {
-  random,        // RandomLib ({ random(), setSeed() }); default Math.random
+  seed,          // number | string: makes the run repeatable
+  random,        // your own random source ({ random(), setSeed() }); default Math.random, deterministic once seeded
   maxRetries,    // maximum number of backtracks, in total, before giving up; default 10000
   restartAfter,  // restart cutoff unit, in backtracks; default 25; 0 disables restarts
   logLevel,      // LogLevel.NONE | ERROR | WARN (default) | INFO | DEBUG
@@ -185,7 +188,7 @@ An invalid starting configuration ("Initial seed creates an impossible state") f
 
 ## Custom grids
 
-`SquareGrid`, `HexagonalGrid` and `CubeGrid` are built in, but the engine only calls five methods on a grid, so you can supply your own for any topology: hex maps in other coordinate systems, tori, meshes, graphs. [docs/custom-grids.md](docs/custom-grids.md) is the guide, and [`examples/node/custom-graph.mjs`](examples/node/custom-graph.mjs) two-colours a binary tree.
+`SquareGrid`, `HexagonalGrid` and `CubeGrid` are built in, but a grid is just five members (`iterate`, `get`, `getNeighbors`, `getAdjacencyType`, `adjacencyMaps`), so you can supply your own for any topology: hex maps in other coordinate systems, tori, meshes, graphs. [docs/custom-grids.md](docs/custom-grids.md) is the guide, and [`examples/node/custom-graph.mjs`](examples/node/custom-graph.mjs) two-colours a binary tree.
 
 ## Other APIs
 

@@ -22,7 +22,6 @@ class CubicHexagonalGrid {
         this.cells.set(key, {
           ...cell,
           choices: [...cell.choices],
-          forbidden: [...cell.forbidden],
         });
       }
     } else {
@@ -37,7 +36,6 @@ class CubicHexagonalGrid {
           this.cells.set(key, {
             choices: [],
             collapsed: false,
-            forbidden: [],
             coords: [x, y, z],
           });
         }
@@ -69,7 +67,6 @@ class CubicHexagonalGrid {
       cells: Array.from(this.cells.values()).map((cell) => ({
         ...cell,
         choices: [...cell.choices],
-        forbidden: [...cell.forbidden],
       })),
       width: this.radius * 2 + 1, // Store radius info in width field
       height: this.radius * 2 + 1,

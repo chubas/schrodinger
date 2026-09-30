@@ -44,9 +44,10 @@ export type TileDef = {
   weight?: number;
   
   /**
-   * Function to draw the tile on a canvas context
+   * Optional function to draw the tile on a canvas context. The engine never
+   * calls it; it is there for your renderer's convenience.
    */
-  draw: (ctx: any, x: number, y: number, w: number, h: number) => void;
+  draw?: (ctx: any, x: number, y: number, w: number, h: number) => void;
   
   /**
    * Optional unique identifier

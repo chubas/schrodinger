@@ -4,7 +4,8 @@ import { TileDef } from "./TileDef.js";
 export type Cell<Coords = any> = {
   choices: TileDef[];
   collapsed: boolean;
-  forbidden: TileDef[];
+  /** @deprecated Unused by the engine; grids no longer need to provide it. */
+  forbidden?: TileDef[];
   coords: Coords;
   value?: TileDef; // The selected tile when collapsed
 };
@@ -16,24 +17,26 @@ export type GridSnapshot = {
   depth?: number; // Optional for 3D grids
 };
 
+/**
+ * What the engine needs from a grid. See docs/custom-grids.md.
+ *
+ * `iterate`, `get` and `getNeighbors` must return the same cell objects every
+ * time: the engine stores its state on them. `getNeighbors` returns one entry
+ * per direction (null where there is no neighbour), in the order of the tiles'
+ * adjacencies. `adjacencyMaps[type][d]` is the direction, from the neighbour's
+ * point of view, that points back at a cell of that type looking in direction d.
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface Grid<Coords = any> {
   iterate(): IterableIterator<[Cell<Coords>, Coords]>;
   get(coords: Coords): Cell<Coords> | null;
-  set(coords: Coords, cell: Cell<Coords>): void;
   getNeighbors(coords: Coords): (Cell<Coords> | null)[];
-  getCells(): Cell<Coords>[];
-  clone(): Grid<Coords>;
-  toSnapshot(): GridSnapshot;
-  
-  // New methods for adjacency type handling
   getAdjacencyType(coords: Coords): string;
   adjacencyMaps: Record<string, number[]>;
-  getAdjacencyMap(coords: Coords): number[];
 }
 
 export class SquareGrid implements Grid<[number, number]> {
-  private cells: Cell[];
+  private cells: Cell<[number, number]>[];
   private width: number;
   private height: number;
 
@@ -42,14 +45,13 @@ export class SquareGrid implements Grid<[number, number]> {
     'square': [2, 3, 0, 1] // Bottom, Left, Top, Right
   };
 
-  constructor(width: number, height: number, cells?: Cell[]) {
+  constructor(width: number, height: number, cells?: Cell<[number, number]>[]) {
     this.width = width;
     this.height = height;
     if (cells) {
       this.cells = cells.map((cell) => ({
         ...cell,
         choices: [...cell.choices],
-        forbidden: [...cell.forbidden],
       }));
     } else {
       // Initialize with empty cells
@@ -59,7 +61,6 @@ export class SquareGrid implements Grid<[number, number]> {
           this.cells.push({
             choices: [],
             collapsed: false,
-            forbidden: [],
             coords: [x, y],
           });
         }
@@ -80,14 +81,13 @@ export class SquareGrid implements Grid<[number, number]> {
       cells: this.cells.map((cell) => ({
         ...cell,
         choices: [...cell.choices],
-        forbidden: [...cell.forbidden],
       })),
       width: this.width,
       height: this.height,
     };
   }
 
-  *iterate(): IterableIterator<[Cell, [number, number]]> {
+  *iterate(): IterableIterator<[Cell<[number, number]>, [number, number]]> {
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {
         const n = this.width * y + x;
@@ -96,7 +96,7 @@ export class SquareGrid implements Grid<[number, number]> {
     }
   }
 
-  getNeighbors(coords: [number, number]): (Cell | null)[] {
+  getNeighbors(coords: [number, number]): (Cell<[number, number]> | null)[] {
     const deltas = [
       [0, -1], // Top
       [1, 0], // Right
@@ -114,7 +114,7 @@ export class SquareGrid implements Grid<[number, number]> {
     return neighbors;
   }
 
-  get([x, y]: [number, number]): Cell | null {
+  get([x, y]: [number, number]): Cell<[number, number]> | null {
     // Check if coordinates are out of bounds
     if (x < 0 || y < 0 || x >= this.width || y >= this.height) {
       return null;
@@ -123,7 +123,7 @@ export class SquareGrid implements Grid<[number, number]> {
     return this.cells[n];
   }
 
-  set([x, y]: [number, number], cell: Cell) {
+  set([x, y]: [number, number], cell: Cell<[number, number]>) {
     const n = this.width * y + x;
     if (n < 0 || n >= this.cells.length) {
       return;
@@ -131,7 +131,7 @@ export class SquareGrid implements Grid<[number, number]> {
     this.cells[n] = cell;
   }
 
-  getCells(): Cell[] {
+  getCells(): Cell<[number, number]>[] {
     return this.cells;
   }
 
@@ -153,7 +153,7 @@ export class SquareGrid implements Grid<[number, number]> {
 }
 
 export class TriangularGrid implements Grid<[number, number]> {
-  private cells: Cell[];
+  private cells: Cell<[number, number]>[];
   private width: number;
   private height: number;
   
@@ -163,14 +163,13 @@ export class TriangularGrid implements Grid<[number, number]> {
     'down': [0, 0, 2]    // [bottomLeft, bottomRight, top] -> [topLeft, topRight, bottom]
   };
   
-  constructor(width: number, height: number, cells?: Cell[]) {
+  constructor(width: number, height: number, cells?: Cell<[number, number]>[]) {
     this.width = width;
     this.height = height;
     if (cells) {
       this.cells = cells.map((cell) => ({
         ...cell,
         choices: [...cell.choices],
-        forbidden: [...cell.forbidden],
       }));
     } else {
       // Initialize with empty cells
@@ -180,7 +179,6 @@ export class TriangularGrid implements Grid<[number, number]> {
           this.cells.push({
             choices: [],
             collapsed: false,
-            forbidden: [],
             coords: [x, y],
           });
         }
@@ -201,14 +199,13 @@ export class TriangularGrid implements Grid<[number, number]> {
       cells: this.cells.map((cell) => ({
         ...cell,
         choices: [...cell.choices],
-        forbidden: [...cell.forbidden],
       })),
       width: this.width,
       height: this.height,
     };
   }
   
-  *iterate(): IterableIterator<[Cell, [number, number]]> {
+  *iterate(): IterableIterator<[Cell<[number, number]>, [number, number]]> {
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {
         const n = this.width * y + x;
@@ -227,7 +224,7 @@ export class TriangularGrid implements Grid<[number, number]> {
     return this.adjacencyMaps[this.getAdjacencyType(coords)];
   }
   
-  getNeighbors(coords: [number, number]): (Cell | null)[] {
+  getNeighbors(coords: [number, number]): (Cell<[number, number]> | null)[] {
     const [x, y] = coords;
     const isPointingUp = this.getAdjacencyType(coords) === 'up';
     
@@ -248,7 +245,7 @@ export class TriangularGrid implements Grid<[number, number]> {
     }
   }
   
-  get([x, y]: [number, number]): Cell | null {
+  get([x, y]: [number, number]): Cell<[number, number]> | null {
     // Check if coordinates are out of bounds
     if (x < 0 || y < 0 || x >= this.width || y >= this.height) {
       return null;
@@ -257,7 +254,7 @@ export class TriangularGrid implements Grid<[number, number]> {
     return this.cells[n];
   }
   
-  set([x, y]: [number, number], cell: Cell) {
+  set([x, y]: [number, number], cell: Cell<[number, number]>) {
     const n = this.width * y + x;
     if (n < 0 || n >= this.cells.length) {
       return;
@@ -265,13 +262,13 @@ export class TriangularGrid implements Grid<[number, number]> {
     this.cells[n] = cell;
   }
   
-  getCells(): Cell[] {
+  getCells(): Cell<[number, number]>[] {
     return this.cells;
   }
 }
 
 export class HexagonalGrid implements Grid<[number, number]> {
-  private cells: Map<string, Cell> = new Map();
+  private cells: Map<string, Cell<[number, number]>> = new Map();
   private width: number;
   private height: number;
   
@@ -280,7 +277,7 @@ export class HexagonalGrid implements Grid<[number, number]> {
     'hex': [3, 4, 5, 0, 1, 2]  // Each direction maps to its opposite (i+3)%6
   };
   
-  constructor(width: number, height: number, cells?: Cell[]) {
+  constructor(width: number, height: number, cells?: Cell<[number, number]>[]) {
     this.width = width;
     this.height = height;
     
@@ -291,7 +288,6 @@ export class HexagonalGrid implements Grid<[number, number]> {
         this.cells.set(key, {
           ...cell,
           choices: [...cell.choices],
-          forbidden: [...cell.forbidden],
         });
       }
     } else {
@@ -302,7 +298,6 @@ export class HexagonalGrid implements Grid<[number, number]> {
           this.cells.set(key, {
             choices: [],
             collapsed: false,
-            forbidden: [],
             coords: [q, r],
           });
         }
@@ -327,14 +322,13 @@ export class HexagonalGrid implements Grid<[number, number]> {
       cells: Array.from(this.cells.values()).map((cell) => ({
         ...cell,
         choices: [...cell.choices],
-        forbidden: [...cell.forbidden],
       })),
       width: this.width,
       height: this.height,
     };
   }
   
-  *iterate(): IterableIterator<[Cell, [number, number]]> {
+  *iterate(): IterableIterator<[Cell<[number, number]>, [number, number]]> {
     for (const [_, cell] of this.cells) {
       yield [cell, cell.coords as [number, number]];
     }
@@ -349,7 +343,7 @@ export class HexagonalGrid implements Grid<[number, number]> {
     return this.adjacencyMaps[this.getAdjacencyType(coords)];
   }
   
-  getNeighbors(coords: [number, number]): (Cell | null)[] {
+  getNeighbors(coords: [number, number]): (Cell<[number, number]> | null)[] {
     const [q, r] = coords;
     
     // Axial coordinate directions (clockwise from N)
@@ -368,23 +362,23 @@ export class HexagonalGrid implements Grid<[number, number]> {
     );
   }
   
-  get(coords: [number, number]): Cell | null {
+  get(coords: [number, number]): Cell<[number, number]> | null {
     const key = this.coordToKey(coords);
     return this.cells.get(key) || null;
   }
   
-  set(coords: [number, number], cell: Cell) {
+  set(coords: [number, number], cell: Cell<[number, number]>) {
     const key = this.coordToKey(coords);
     this.cells.set(key, cell);
   }
   
-  getCells(): Cell[] {
+  getCells(): Cell<[number, number]>[] {
     return Array.from(this.cells.values());
   }
 }
 
 export class CubeGrid implements Grid<[number, number, number]> {
-  private cells: Map<string, Cell> = new Map();
+  private cells: Map<string, Cell<[number, number, number]>> = new Map();
   private dimensions: [number, number, number];
   
   // Define adjacency maps for 3D cube grids
@@ -392,7 +386,7 @@ export class CubeGrid implements Grid<[number, number, number]> {
     'cube': [1, 0, 3, 2, 5, 4]  // +x, -x, +y, -y, +z, -z -> -x, +x, -y, +y, -z, +z
   };
   
-  constructor(width: number, height: number, depth: number, cells?: Cell[]) {
+  constructor(width: number, height: number, depth: number, cells?: Cell<[number, number, number]>[]) {
     this.dimensions = [width, height, depth];
     
     // Initialize with empty cells
@@ -402,7 +396,6 @@ export class CubeGrid implements Grid<[number, number, number]> {
         this.cells.set(key, {
           ...cell,
           choices: [...cell.choices],
-          forbidden: [...cell.forbidden],
         });
       }
     } else {
@@ -413,7 +406,6 @@ export class CubeGrid implements Grid<[number, number, number]> {
             this.cells.set(key, {
               choices: [],
               collapsed: false,
-              forbidden: [],
               coords: [x, y, z],
             });
           }
@@ -451,7 +443,6 @@ export class CubeGrid implements Grid<[number, number, number]> {
       cells: Array.from(this.cells.values()).map((cell) => ({
         ...cell,
         choices: [...cell.choices],
-        forbidden: [...cell.forbidden],
       })),
       width: this.dimensions[0],
       height: this.dimensions[1],
@@ -459,7 +450,7 @@ export class CubeGrid implements Grid<[number, number, number]> {
     };
   }
   
-  *iterate(): IterableIterator<[Cell, [number, number, number]]> {
+  *iterate(): IterableIterator<[Cell<[number, number, number]>, [number, number, number]]> {
     for (const [_, cell] of this.cells) {
       yield [cell, cell.coords as [number, number, number]];
     }
@@ -474,7 +465,7 @@ export class CubeGrid implements Grid<[number, number, number]> {
     return this.adjacencyMaps[this.getAdjacencyType(coords)];
   }
   
-  getNeighbors(coords: [number, number, number]): (Cell | null)[] {
+  getNeighbors(coords: [number, number, number]): (Cell<[number, number, number]> | null)[] {
     const [x, y, z] = coords;
     
     // Order: +x, -x, +y, -y, +z, -z (right, left, up, down, forward, backward)
@@ -490,17 +481,17 @@ export class CubeGrid implements Grid<[number, number, number]> {
     return directions.map(coord => this.get(coord as [number, number, number]));
   }
   
-  get(coords: [number, number, number]): Cell | null {
+  get(coords: [number, number, number]): Cell<[number, number, number]> | null {
     const key = this.coordToKey(coords);
     return this.cells.get(key) || null;
   }
   
-  set(coords: [number, number, number], cell: Cell) {
+  set(coords: [number, number, number], cell: Cell<[number, number, number]>) {
     const key = this.coordToKey(coords);
     this.cells.set(key, cell);
   }
   
-  getCells(): Cell[] {
+  getCells(): Cell<[number, number, number]>[] {
     return Array.from(this.cells.values());
   }
 }

@@ -23,7 +23,6 @@ class TriangleGrid implements Grid<[number, number]> {
         this.cells[cellCount++] = {
           choices: [],
           collapsed: false,
-          forbidden: [],
           coords: [col, row],
         };
       }
@@ -86,7 +85,6 @@ class TriangleGrid implements Grid<[number, number]> {
       newGrid.cells[index] = {
         ...cell,
         choices: [...cell.choices],
-        forbidden: [...cell.forbidden],
       };
     });
     return newGrid;
@@ -97,7 +95,6 @@ class TriangleGrid implements Grid<[number, number]> {
       cells: this.cells.map(cell => ({
         ...cell,
         choices: [...cell.choices],
-        forbidden: [...cell.forbidden],
       })),
       width: this.size,
       height: this.size,

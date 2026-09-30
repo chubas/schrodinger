@@ -14,19 +14,14 @@ Roughly in order of how much they matter for users. See also the open items in
 
 ## API cleanup (before calling it 1.0)
 
-- `TileDef.draw` is required by the type although the engine never calls it; drawing doesn't belong in the core type.
-- The `Grid` interface requires `set`, `getCells`, `clone`, `toSnapshot` and `getAdjacencyMap`, which the engine no longer uses. It could shrink to the five members in `docs/custom-grids.md`.
-- Types are looser than they should be: `Cell<Coords = any>`, and `coords` is typed `[number, number]` in `CellCollapse`, events and seeds, which is wrong for `CubeGrid` and custom grids.
-- `CollapseGroup.cause` has a `"propagation"` value that is never produced.
-- The default RNG (`DefaultRandom`) uses `Math.random` and ignores `setSeed`. A bundled seedable default would make reproducibility the default.
-- Failures are logged at `ERROR` level (as well as emitted and thrown), so the default log level prints a stack trace for every failed run.
-- `WFC` extends Node's `EventEmitter`, so the browser build needs the `events` shim in `examples/shared/`. Bundling a tiny emitter would remove that.
-- `seedrandom` is a runtime dependency (and bundled into the browser build) but only the stress test uses it.
+- `WFC` extends Node's `EventEmitter`, so the browser build needs the `events` shim in `examples/shared/`. Bundling the `events` polyfill package (or a tiny emitter) into the browser build would remove that; it needs one new dev dependency.
 - The adjacency grammar's quirks (two negations never match; values are alphanumeric only) are documented in `docs/adjacency-grammar.md` but could be revisited.
+- Failures are still logged at `ERROR` level (now as one line, without a stack trace) as well as emitted and thrown; `LogLevel.NONE` silences it.
+- `DefaultRandom` is `Math.random` until seeded. Whether an unseeded run should be reproducible by default is a design question.
 
 ## Project
 
-- Publish: package name, `exports`, `files`, `repository`/`keywords`, a `prepublishOnly` build, `CHANGELOG`, `CONTRIBUTING`, CI (tests + lint + stress-test comparison).
+- Publish: package name, `exports`, `files`, `repository`/`keywords`, a `prepublishOnly` build, `CHANGELOG` (the API cleanup changed `Grid`, `Cell`, `TileDef`, the exported types and `seedrandom`'s status), `CONTRIBUTING`, CI (tests + lint + stress-test comparison).
 - Lint: `npm run lint` reports formatting errors across `src/`; `npm run lint:fix` fixes them. The prettier settings live in `.prettierrc.txt`, which prettier doesn't read (it looks for `.prettierrc`).
 - `benchmark/` still uses a synthetic tileset where every tile matches every other; `stress-test/` is the more meaningful measurement.
 - More tileset examples (a Wang-tile set, a Tiled-format importer, rules using the full grammar).
