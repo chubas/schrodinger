@@ -49,11 +49,9 @@ export type CollapseResult = {
 
 export type WFCEvents = {
   collapse: (group: CollapseGroup) => void;
-  propagate: (cells: Cell[]) => void;
   backtrack: (from: CollapseGroup) => void;
   complete: () => void;
   error: (error: Error) => void;
-  snapshot: (id: number) => void;
 };
 
 /** @deprecated Ignored; backtracking is a depth-first search limited by WFCOptions.maxRetries. */

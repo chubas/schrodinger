@@ -24,7 +24,7 @@
     "stress-test:compare": "npm run build:stress-test && bash stress-test/suite.sh compare"
   },
   "author": "Rubén Medellín",
-  "license": "ISC",
+  "license": "LGPL-2.1-only",
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
     "@eslint/js": "^9.16.0",

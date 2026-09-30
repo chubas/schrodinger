@@ -2,13 +2,14 @@
 // Based on the original _iso.js implementation
 
 // Configuration
-let tileSize = 100;
-// let tileX = 10;
-// let tileY = 15;
-let tileX = 4;
-let tileY = 4;
+let tileSize = 60;
+let tileX = 10;
+let tileY = 15;
+// let tileX = 30;
+// let tileY = 20;
 let tileWidth, tileHeight;
 let wfc;
+let rng;
 let TILES = [];
 let colors = [
   "yellow",
@@ -20,6 +21,9 @@ let done = false;
 // Add variables for step-by-step execution
 let wfcGenerator = null;
 let stepMode = true;
+// Optional: the engine builds its own lookup tables from the tiles' adjacency
+// rules, so this only needs a value to load a previously serialized table.
+let precomputedAdjacencies = null;
 
 // Check if Schrodinger is loaded
 if (typeof Schrodinger === 'undefined') {
@@ -69,10 +73,10 @@ function getCentroid(triangle) {
 
 // Debug function to draw triangle indices
 function debugTriangle(triangles, i) {
-  let centroid = getCentroid(triangles[i]);
-  fill(0);
-  textAlign(CENTER, CENTER);
-  text(i, ...centroid);
+  // let centroid = getCentroid(triangles[i]);
+  // fill(0);
+  // textAlign(CENTER, CENTER);
+  // text(i, ...centroid);
 }
 
 // Create Type A tile
@@ -187,6 +191,7 @@ function createTileB(types) {
 
       for (let i = 0; i < types.length; i++) {
         noStroke();
+        // stroke(colors[types[i]]);
         fill(colors[types[i]]);
         triangle(...triangles[i].flat());
         debugTriangle(triangles, i);
@@ -261,6 +266,9 @@ function generateTiles() {
     }
   });
 
+  // possibleTilesA = possibleTilesA.slice(0, floor(possibleTilesA.length / 2));
+  // possibleTilesB = possibleTilesB.slice(0, floor(possibleTilesB.length / 2));
+
   // Create tile definitions
   for (let t of possibleTilesA) {
     TILES.push(createTileA(t));
@@ -275,6 +283,29 @@ function generateTiles() {
   }
 
   console.log(`Generated ${TILES.length} tiles (${possibleTilesA.length} Type A, ${possibleTilesB.length} Type B)`);
+}
+
+// Function to compute and output the adjacencies
+function computeAdjacencies() {
+  if (!TILES || TILES.length === 0) {
+    console.error("Cannot compute adjacencies: Tiles not generated yet");
+    return null;
+  }
+  
+  console.log("Computing precomputed adjacencies...");
+  // Create a sample grid to use for the calculation
+  const grid = new Schrodinger.SquareGrid(3, 3);
+  
+  // Use the AdjacencyPrecomputer to calculate the adjacencies
+  const computed = Schrodinger.AdjacencyPrecomputer.precomputeAdjacencies(TILES, grid);
+  
+  // Serialize to JSON for output
+  const serialized = Schrodinger.AdjacencyPrecomputer.serialize(computed);
+  
+  console.log("Precomputed adjacencies generated:");
+  console.log(serialized);
+  
+  return computed;
 }
 
 // p5.js setup function
@@ -302,6 +333,7 @@ function setup() {
     }
 
     setSeed(seed) {
+      console.log(`%cSetting seed: ${seed}`, 'color: green; font-weight: bold;');
       randomSeed(seed);
     }
 
@@ -312,27 +344,21 @@ function setup() {
     }
   }
 
-  let rng = new P5Random();
-  rng.setSeed(10);
+  rng = new P5Random();
+  // A random seed per load; open the page with ?seed=12345 to reproduce a run.
+  const seedParam = new URLSearchParams(window.location.search).get('seed');
+  rng.setSeed(seedParam !== null ? Number(seedParam) : floor(random(1000000)));
   // Create canvas
   createCanvas(tileX * tileWidth, tileY * tileHeight);
 
   try {
     // Initialize WFC
     const grid = new Schrodinger.SquareGrid(tileX, tileY);
-    wfc = new Schrodinger.WFC(TILES, grid, {
-      logLevel: Schrodinger.LogLevel.DEBUG,
-      random: rng
-    });
+    wfc = new Schrodinger.WFC(TILES, grid, { random: rng });
 
-
-    wfc.on('collapse', (cell) => {
-      // console.log(`Collapsed cell: ${cell.id}: ${cell.choices[0].id} (${cell.choices[0].adjacencies})`);
-      console.log({ cell });
-      for (let c of cell.cells) {
-        console.log(`${c.coords[0]}, ${c.coords[1]}: ${c.value}`, c.value)
-      }
-    });
+    if (precomputedAdjacencies) {
+      wfc.setPrecomputedAdjacencies(precomputedAdjacencies);
+    }
 
     // Listen for completion
     wfc.on('complete', () => {
@@ -344,8 +370,8 @@ function setup() {
       console.error('WFC error:', error);
     });
     
-    // Initialize the generator but don't run it immediately
-    // We'll step through it using the 'C' key
+    // The generator is advanced one step per frame in draw(), or manually
+    // with the 'C' key.
     if (stepMode) {
       wfcGenerator = wfc.execute();
     } else {
@@ -361,11 +387,28 @@ function setup() {
   }
 }
 
+let drawAdjacencies = (cell, x, y) => {
+  fill('red');
+  textAlign(CENTER, TOP);
+  let space = min(tileWidth, tileHeight) / 10;
+  text(cell.choices[0].adjacencies[0], x + tileWidth / 2, y + space);
+  // Bottom Adjacency. Align text bottom center to be within the cell and touching the bottom edge
+  textAlign(CENTER, BOTTOM);
+  text(cell.choices[0].adjacencies[2], x + tileWidth / 2, y + tileHeight - space);
+  // Left Adjacency. Align text left center to be within the cell and touching the left edge
+  textAlign(LEFT, CENTER);
+  text(cell.choices[0].adjacencies[3], x + space, y + tileHeight / 2);
+  // Right Adjacency. Align text right center to be within the cell and touching the right edge
+  textAlign(RIGHT, CENTER);
+  text(cell.choices[0].adjacencies[1], x + tileWidth - space, y + tileHeight / 2);
+}
+
 // p5.js draw function
 function draw() {
   if (preview) return;
+  if (done) return;
 
-  background('green');
+  background(200);
 
   // Draw the current state of the grid
   for (const [cell, coords] of wfc.iterate()) {
@@ -382,6 +425,9 @@ function draw() {
       // text(cell.choices[0].name, tileWidth / 2, tileHeight / 2);
       // console.log(`${coords[0]}, ${coords[1]} | Adjacencies: ${cell.choices[0].adjacencies} --- ${cell.choices[0].id}`);
       pop();
+      // Also draw the adjacencies
+      // drawAdjacencies(cell, x, y);
+      
     } else {
       // Draw uncollapsed cells
       // push();
@@ -409,6 +455,55 @@ function draw() {
   //   }
   // }
   // noLoop();
+  // Advance the WFC one step
+  if (stepMode) {
+    try {
+      const result = wfcGenerator.next();
+      if (result.done) {
+        done = true;
+        wfcGenerator = null;
+      }
+    } catch (error) {
+      console.error('WFC failed:', error.message);
+      done = true;
+      wfcGenerator = null;
+    }
+  }
+  drawGrid();
+  drawHexGrid();
+}
+
+let drawGrid = () => {
+  stroke('#00000020');
+  strokeWeight(2);
+  for (let x = 0; x < tileX; x++) {
+    line(x * tileWidth, 0, x * tileWidth, tileY * tileHeight);
+  }
+  for (let y = 0; y < tileY; y++) {
+    line(0, y * tileHeight, tileX * tileWidth, y * tileHeight);
+  }
+}
+
+function drawHexGrid() {
+  stroke(0);
+  strokeWeight(2);
+  for (let x = 0; x < tileX; x++) {
+    for (let y = 0; y < tileY; y++) {
+      push();
+      translate(x * tileWidth, y * tileHeight);
+      if (y % 2 === 0) {
+        line(0, 0, tileWidth / 2, tileHeight / 3);
+        line(tileWidth / 2, tileHeight / 3, tileWidth, 0);
+        line(tileWidth / 2, tileHeight / 3, tileWidth / 2, tileHeight);
+      } else {
+        line(0, tileHeight / 3, tileWidth / 2, 0);
+        line(tileWidth / 2, 0, tileWidth, tileHeight / 3);
+        line(0, tileHeight / 3, 0, tileHeight);
+        line(tileWidth, tileHeight / 3, tileWidth, tileHeight);
+      }
+      pop();
+    }
+  }
 }
 
 // Preview all generated tiles
@@ -465,6 +560,12 @@ function keyPressed() {
           // logLevel: Schrodinger.LogLevel.INFO
         });
 
+        // Apply precomputed adjacencies if available
+        if (precomputedAdjacencies) {
+          wfc.setPrecomputedAdjacencies(precomputedAdjacencies);
+          console.log("Using predefined precomputed adjacencies");
+        }
+
         done = false;
         resizeCanvas(tileX * tileWidth, tileY * tileHeight);
         
@@ -482,9 +583,18 @@ function keyPressed() {
     // Restart WFC
     try {
       const grid = new Schrodinger.SquareGrid(tileX, tileY);
+      let seed = floor(random(1000000));
+      rng.setSeed(seed);
       wfc = new Schrodinger.WFC(TILES, grid, {
-        logLevel: Schrodinger.LogLevel.INFO
+        // logLevel: Schrodinger.LogLevel.DEBUG, // Enable DEBUG logging to see exhaustion checks
+        random: rng
       });
+
+      // Apply precomputed adjacencies if available
+      if (precomputedAdjacencies) {
+        wfc.setPrecomputedAdjacencies(precomputedAdjacencies);
+        console.log("Using predefined precomputed adjacencies");
+      }
 
       done = false;
       
@@ -495,6 +605,15 @@ function keyPressed() {
       }
     } catch (error) {
       console.error('Error restarting WFC:', error);
+    }
+  } else if (key === 'A' || key === 'a') {
+    // Compute adjacencies on demand and output to console
+    const computed = computeAdjacencies();
+    
+    if (computed && wfc) {
+      // Apply to current WFC instance
+      wfc.setPrecomputedAdjacencies(computed);
+      console.log("Applied computed adjacencies to current WFC instance");
     }
   } else if (key === 'C' || key === 'c') {
     // Step through the WFC algorithm
@@ -524,8 +643,14 @@ function keyPressed() {
       try {
         const grid = new Schrodinger.SquareGrid(tileX, tileY);
         wfc = new Schrodinger.WFC(TILES, grid, {
-          logLevel: Schrodinger.LogLevel.INFO
+          // logLevel: Schrodinger.LogLevel.DEBUG
         });
+
+        // Apply precomputed adjacencies if available
+        if (precomputedAdjacencies) {
+          wfc.setPrecomputedAdjacencies(precomputedAdjacencies);
+          console.log("Using predefined precomputed adjacencies");
+        }
 
         done = false;
         stepMode = true;
@@ -534,6 +659,37 @@ function keyPressed() {
       } catch (error) {
         console.error('Error setting up step mode:', error);
       }
+    }
+  } else if (key === 'D' || key === 'd') {
+    // Debug mode - display detailed information about each cell
+    if (!preview && wfc) {
+      console.log("--- WFC Cell Debug Information ---");
+      
+      // Iterate through each cell in the grid
+      for (const [cell, coords] of wfc.iterate()) {
+        // Create a console group with cell coordinates as header
+        console.group(`Cell [${coords[0]}, ${coords[1]}] - ${cell.choices.length} choices${cell.collapsed ? " - COLLAPSED" : ""}`);
+        
+        // Create an array of objects for the table
+        const tableData = cell.choices.map(tile => {
+          return {
+            ID: tile.id,
+            Name: tile.name,
+            Adjacencies: tile.adjacencies.join(', ')
+          };
+        });
+        
+        // Display the table of remaining tiles
+        if (tableData.length > 0) {
+          console.table(tableData);
+        } else {
+          console.log("No remaining choices");
+        }
+        
+        console.groupEnd();
+      }
+      
+      console.log("--- End of Debug Information ---");
     }
   }
 }

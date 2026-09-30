@@ -4,7 +4,7 @@ This directory contains utilities for benchmarking the Wave Function Collapse (W
 
 ## Benchmark Utilities
 
-- `benchmark.js`: Core benchmarking script that simulates the WFC algorithm
+- `benchmark.ts`: Core benchmarking script; runs the real engine on a synthetic tileset in which every tile matches every other, so it measures raw engine overhead rather than constraint solving. For realistic workloads and correctness checks use `stress-test/` (see the main README).
 - `compare.js`: Tool for comparing benchmark results over time
 
 ## Metrics Tracked
@@ -15,6 +15,7 @@ The benchmarking tools track several key metrics:
 - **Algorithm Operations**:
   - Number of cell collapses
   - Number of backtracking operations
+- **Memory**: heap and RSS usage
 - **Success Rate**: Percentage of runs that complete successfully
 
 ## Running Benchmarks

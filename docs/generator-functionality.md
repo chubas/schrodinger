@@ -45,7 +45,7 @@ while (!step.done) {
     console.log('Collapse event:', result.group);
     // Visualize the collapse
   } else if (result.type === 'backtrack') {
-    console.log('Backtrack event:', result.group);
+    console.log('Backtrack: ruled out', result.group.cells[0].value.name, 'at', result.group.cells[0].coords);
     // Visualize the backtrack
   } else if (result.type === 'complete') {
     console.log('Algorithm completed!');
@@ -65,12 +65,18 @@ type StepResult = {
   type: "collapse" | "backtrack" | "complete";
   group?: CollapseGroup;
   affectedCells?: Cell[];
+  depth?: number;
 };
 ```
 
-- `type`: Indicates the type of step (collapse, backtrack, or complete)
-- `group`: For collapse and backtrack steps, contains information about the cells involved
-- `affectedCells`: For collapse steps, contains the cells that were affected by the collapse
+- `type`: what just happened: a cell was collapsed, a decision was undone (backtrack), or the run finished
+- `group`: for `collapse`, the cell and the tile it was given (`group.cells[0].coords` / `.value`); for `backtrack`, the decision that was undone and ruled out. A seeded start yields one `collapse` with `cause: "initial"` covering all the seeded cells.
+- `affectedCells`: for `collapse`, the cells that were collapsed
+- `depth`: for `backtrack`, how many decisions the current backtrack has undone so far. It is 1 when ruling out the last decision was enough, and grows when that also led to a contradiction and earlier decisions had to be undone as well.
+
+A failed run (no solution, or the backtrack budget ran out) throws from `generator.next()`; see "Errors" in the README.
+
+The generator's second argument, `execute(initialSeed, emitEvents = true)`, turns the events off if you only want the yielded steps.
 
 ### With Initial Seed
 
@@ -149,13 +155,13 @@ async function controlledExecution() {
 
 ## Events vs. Generator
 
-The WFC class still emits events (`collapse`, `backtrack`, `complete`) for backward compatibility. When using the generator approach, you can choose to listen for these events or just use the yielded step results.
+The WFC class also emits events (`collapse`, `backtrack`, `complete`, `error`) while you drive the generator, unless you pass `emitEvents = false`. You can listen for those, use the yielded step results, or both.
 
 The generator approach gives you more control over the execution flow, while the event-based approach is more suitable for passive observation of the algorithm's progress.
 
 ## Performance Considerations
 
-Using the generator approach may have a slight performance overhead compared to running the algorithm to completion with `start()`. If performance is critical and you don't need step-by-step control, consider using the traditional approach.
+`start()` simply drives this same generator to completion, so there is no separate fast path: stepping costs only what you do between steps.
 
 ## Conclusion
 

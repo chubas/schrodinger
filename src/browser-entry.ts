@@ -4,7 +4,7 @@
  */
 
 // Export the core classes
-export { SquareGrid } from "./Grid.js";
+export { SquareGrid, HexagonalGrid, CubeGrid } from "./Grid.js";
 export { WFC, LogLevel } from "./WFC.js";
 export { TileDef, TileDefFactory } from "./TileDef.js";
 export { RandomLib, DefaultRandom } from "./RandomLib.js";

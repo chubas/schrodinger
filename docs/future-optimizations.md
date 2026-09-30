@@ -1,5 +1,12 @@
 # Wave Function Collapse Optimization Strategies
 
+> **Status: idea list, partly outdated.** This was written before the propagation rewrite and is kept as a brainstorm of directions, not a description of the code. What has happened since:
+>
+> - Incremental propagation, delta snapshots and "intelligent" backtracking were **implemented differently**: support-counting propagation with an undo trail, and plain depth-first backtracking. See [propagation-support-counting-spec.md](propagation-support-counting-spec.md).
+> - The binary/bitset adjacency encoding was tried and **removed**. Compatibility is now stored in index-based tables built once per tileset (`src/AdjacencyTables.ts`).
+> - Sections below that describe the old `BacktrackTree`, snapshot or propagation code no longer match the implementation.
+> - Not done yet: restarts, backjumping and per-level retry limits for backtracking; sparse grid storage; parallel propagation; hierarchical WFC.
+
 This document outlines potential optimization strategies for the Wave Function Collapse (WFC) algorithm. These approaches aim to improve performance, reduce memory usage, and enhance the overall efficiency of the implementation.
 
 ## Table of Contents

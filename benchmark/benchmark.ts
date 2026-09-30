@@ -187,7 +187,6 @@ async function runBenchmark(): Promise<boolean> {
     // Track metrics
     let collapses = 0;
     let backtracks = 0;
-    let snapshotCount = 0;
 
     // Initialize memory tracking
     const memoryBefore = getMemoryUsage();
@@ -231,16 +230,6 @@ async function runBenchmark(): Promise<boolean> {
       backtracks++;
       // Sample memory on each backtrack operation
       trackMemory();
-    });
-
-    // Add event listener for snapshots
-    wfc.on('snapshot', () => {
-      snapshotCount++;
-      // Sample memory on each snapshot
-      trackMemory();
-      if (verbose && snapshotCount % 10 === 0) {
-        console.log(`Snapshot count: ${snapshotCount}`);
-      }
     });
 
     // Run the WFC algorithm and measure execution time
@@ -296,7 +285,6 @@ async function runBenchmark(): Promise<boolean> {
       console.log(`Memory increase (end heap): ${formatMemory(memoryAfter.heapUsed - memoryBefore.heapUsed)}`);
       console.log(`Memory increase (peak heap): ${formatMemory(peakHeapUsed - memoryBefore.heapUsed)}`);
       console.log(`Memory samples collected: ${memorySamplesCount}`);
-      console.log(`Total snapshots created: ${snapshotCount}`);
     }
 
     // Store results
@@ -313,7 +301,6 @@ async function runBenchmark(): Promise<boolean> {
         success,
         collapses,
         backtracks,
-        snapshots: snapshotCount,
         memorySamples: memorySamplesCount,
         memory: {
           before: memoryBefore,
@@ -355,7 +342,6 @@ async function runBenchmark(): Promise<boolean> {
   const avgExecutionTime = results.reduce((sum, run) => sum + run.results.executionTime, 0) / results.length;
   const avgCollapses = results.reduce((sum, run) => sum + run.results.collapses, 0) / results.length;
   const avgBacktracks = results.reduce((sum, run) => sum + run.results.backtracks, 0) / results.length;
-  const avgSnapshots = results.reduce((sum, run) => sum + (run.results.snapshots || 0), 0) / results.length;
 
   // Calculate average memory metrics
   const avgMemoryIncrease = {
@@ -369,7 +355,6 @@ async function runBenchmark(): Promise<boolean> {
   console.log(`Average memory increase: ${formatMemory(avgMemoryIncrease.heapUsed)}`);
   console.log(`Average collapses: ${avgCollapses.toFixed(2)}`);
   console.log(`Average backtracks: ${avgBacktracks.toFixed(2)}`);
-  console.log(`Average snapshots: ${avgSnapshots.toFixed(2)}`);
 
   // Save results to file
   const existingResults = fs.existsSync(outputFile)

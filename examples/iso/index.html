@@ -27,24 +27,13 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.min.js"></script>
 
     <!-- Load our custom EventEmitter implementation -->
-    <script src="EventEmitter.js"></script>
+    <script src="../shared/EventEmitter.js"></script>
 
-    <!-- Define global events module for compatibility -->
-    <script>
-        // Create a global events module for compatibility
-        window.events = { EventEmitter: window.EventEmitter };
-
-        // Define a global require function for compatibility
-        window.require = function(moduleName) {
-            if (moduleName === 'events') {
-                return window.events;
-            }
-            throw new Error(`Module ${moduleName} not found`);
-        };
-    </script>
+    <!-- Browser stand-in for Node's "events" module -->
+    <script src="../shared/browser-shim.js"></script>
 
     <!-- Load Schrodinger WFC library -->
-    <script src="dist/index.global.js"></script>
+    <script src="../../dist/index.global.js"></script>
 
     <!-- Load our sketch -->
     <script src="iso.js"></script>
