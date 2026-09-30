@@ -91,7 +91,7 @@ export class SupportPropagator {
     const incomingCount = new Int32Array(C);
     for (let c = 0; c < C; c++) {
       neighborLists[c].forEach((neighborCell, d) => {
-        const n = neighborCell ? this.cellIndex.get(neighborCell) ?? -1 : -1;
+        const n = neighborCell ? (this.cellIndex.get(neighborCell) ?? -1) : -1;
         this.neighbor[c * D + d] = n;
         if (n >= 0) incomingCount[n]++;
       });

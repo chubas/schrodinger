@@ -26,21 +26,27 @@ You describe your tiles and which sides may touch; the engine fills a grid (or a
 
 ## Install
 
-Not on npm yet. To use it from a clone:
-
 ```bash
-git clone <this repository> && cd schrodinger
-npm install
-npm run build          # writes dist/ (ESM, CJS, types)
-npm run build:browser  # also writes dist/index.global.js for <script> tags
+npm install schrodinger-wfc
 ```
 
-and import from `dist/`, or `npm link` it. The examples below import from `'schrodinger'`, the name in `package.json`. Tested on Node 22.
+Works in Node 18+ and in browsers, as ESM (`import { WFC } from 'schrodinger-wfc'`) or CommonJS (`const { WFC } = require('schrodinger-wfc')`), with TypeScript types included. Bundlers (webpack, Vite, esbuild, ...) need no configuration: the main entry doesn't touch Node's `fs`.
+
+**In a browser without a bundler**, use the self-contained build, which exposes a `Schrodinger` global:
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/schrodinger-wfc/dist/index.global.min.js"></script>
+<script>
+  const { WFC, SquareGrid } = Schrodinger;
+</script>
+```
+
+> The package isn't published yet, so the install command and CDN URL above won't work until it is. To try it now, clone this repository and run `npm install` (this also builds `dist/`), then import from `dist/index.js` or `npm link` it.
 
 ## Quick start
 
 ```js
-import { WFC, SquareGrid } from 'schrodinger';
+import { WFC, SquareGrid } from 'schrodinger-wfc';
 
 // A tile is a name plus one adjacency rule per side, in the grid's direction
 // order. For SquareGrid that's top, right, bottom, left. Two tiles can sit next
@@ -129,6 +135,8 @@ for (const step of wfc.execute()) {} // the same run, one step at a time
 | `complete` | none | every cell is collapsed |
 | `error` | `Error` | the run failed (it is also thrown) |
 
+The engine has its own small event emitter (`on`, `once`, `off`, `emit`, `removeAllListeners`, ...) rather than Node's `EventEmitter`, so it behaves the same in Node and in browsers, and listeners are type-checked in TypeScript.
+
 **`execute()` is a generator** yielding `{ type: 'collapse' | 'backtrack' | 'restart' | 'complete', group, affectedCells, depth }` after each step (after a `restart` every cell except the initial ones is uncollapsed again), which is how the browser demos animate one collapse per frame. See [docs/generator-functionality.md](docs/generator-functionality.md).
 
 **Reproducibility.** Pass a `seed` (a number or a string) and the same tiles, grid, options and seed always give the same result, on every platform:
@@ -192,7 +200,7 @@ An invalid starting configuration ("Initial seed creates an impossible state") f
 
 ## Other APIs
 
-- **`TilesetImporter`** (Node only) loads tiles from JSON: `{ "tiles": [{ "name": "grass", "adjacencies": ["g", "g", "g", "g"], "weight": 2 }] }`.
+- **`TilesetImporter`** (Node only: `import { TilesetImporter } from 'schrodinger-wfc/node'`) loads tiles from JSON: `{ "tiles": [{ "name": "grass", "adjacencies": ["g", "g", "g", "g"], "weight": 2 }] }`.
 - **`AdjacencyPrecomputer`** compares every pair of tiles ahead of time and can serialize the result; `wfc.setPrecomputedAdjacencies(table)` (before starting) then skips that work. Optional: the engine builds its own lookup tables when it first runs.
 - **`parseAdjacencyRule`, `matchAdjacencies`** expose the rule parser and matcher.
 
@@ -228,12 +236,13 @@ Comparing tile rules and building the lookup tables (a few milliseconds for 90 t
 
 ```bash
 npm test                    # unit tests (jest)
-npm run build               # dist/: ESM, CJS and type declarations
-npm run build:browser       # also dist/index.global.js for the browser demos
+npm run build               # dist/: ESM, CJS, type declarations and the browser builds
+npm run lint                # eslint + prettier check (npm run lint:fix, npm run format to fix)
 npm run stress-test         # 1000 seeds on the isometric tileset; see --help for options
 npm run stress-test:record  # record baselines (run this on a known-good version)
 npm run stress-test:compare # check the current code against the baselines, seed by seed
 npm run benchmark           # timing and memory on synthetic tilesets
+npm run check:package       # packs the library and uses the tarball as a consumer would (ESM, CJS, TypeScript, browser)
 ```
 
 `stress-test/` is the main correctness tool: it fingerprints each seed's complete run, so a refactor that changes behavior anywhere shows up as a mismatched seed. Layout:

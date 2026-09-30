@@ -2,7 +2,7 @@
 //
 //   npm run build && node examples/node/quickstart.mjs
 //
-// (In your own project, import from 'schrodinger' instead of the dist path.)
+// (In your own project, import from 'schrodinger-wfc' instead of the dist path.)
 import { WFC, SquareGrid } from '../../dist/index.js';
 
 // A tile is a name plus one adjacency rule per side, in the grid's direction

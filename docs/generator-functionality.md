@@ -24,8 +24,7 @@ This is particularly useful for:
 Instead of using the `start()` method which runs the algorithm to completion, you can use the `execute()` generator method:
 
 ```typescript
-import { WFC } from 'schrodinger';
-import { SquareGrid } from 'schrodinger';
+import { WFC, SquareGrid } from 'schrodinger-wfc';
 
 // Create a WFC instance
 const grid = new SquareGrid(10, 10);

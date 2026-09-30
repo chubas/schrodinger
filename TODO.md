@@ -14,14 +14,13 @@ Roughly in order of how much they matter for users. See also the open items in
 
 ## API cleanup (before calling it 1.0)
 
-- `WFC` extends Node's `EventEmitter`, so the browser build needs the `events` shim in `examples/shared/`. Bundling the `events` polyfill package (or a tiny emitter) into the browser build would remove that; it needs one new dev dependency.
 - The adjacency grammar's quirks (two negations never match; values are alphanumeric only) are documented in `docs/adjacency-grammar.md` but could be revisited.
 - Failures are still logged at `ERROR` level (now as one line, without a stack trace) as well as emitted and thrown; `LogLevel.NONE` silences it.
 - `DefaultRandom` is `Math.random` until seeded. Whether an unseeded run should be reproducible by default is a design question.
 
 ## Project
 
-- Publish: package name, `exports`, `files`, `repository`/`keywords`, a `prepublishOnly` build, `CHANGELOG` (the API cleanup changed `Grid`, `Cell`, `TileDef`, the exported types and `seedrandom`'s status), `CONTRIBUTING`, CI (tests + lint + stress-test comparison).
-- Lint: `npm run lint` reports formatting errors across `src/`; `npm run lint:fix` fixes them. The prettier settings live in `.prettierrc.txt`, which prettier doesn't read (it looks for `.prettierrc`).
+- **Publish:** create the npm package (`npm publish`), then confirm the README's install command and CDN URL work. The package is configured (name, `exports`, `files`, `prepare`, CI, `npm run check:package`); publishing itself needs your npm account.
+- **Code of conduct and security policy:** not included. GitHub offers the Contributor Covenant and a `SECURITY.md` template under the repository's Community Standards.
 - `benchmark/` still uses a synthetic tileset where every tile matches every other; `stress-test/` is the more meaningful measurement.
 - More tileset examples (a Wang-tile set, a Tiled-format importer, rules using the full grammar).

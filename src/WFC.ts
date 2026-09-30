@@ -1,4 +1,4 @@
-import { EventEmitter } from "events";
+import { Emitter } from "./Emitter.js";
 import { Grid, Cell } from "./Grid.js";
 import { TileDef } from "./TileDef.js";
 import { RandomLib, DefaultRandom } from "./RandomLib.js";
@@ -73,15 +73,15 @@ export type WFCEvents<Coords = any> = {
 export interface BacktrackStrategy {
   name: string;
   maxLevels: number;
-  exhaustionPolicy: 'immediate' | 'deferred';
+  exhaustionPolicy: "immediate" | "deferred";
   cleanupFrequency: number;
 }
 
 /** @deprecated Ignored; backtracking is a depth-first search limited by WFCOptions.maxRetries. */
 export const BACKTRACK_STRATEGIES = {
-  conservative: { name: 'conservative', maxLevels: 1, exhaustionPolicy: 'immediate' as const, cleanupFrequency: 100 },
-  aggressive: { name: 'aggressive', maxLevels: 5, exhaustionPolicy: 'deferred' as const, cleanupFrequency: 50 },
-  deep: { name: 'deep', maxLevels: 10, exhaustionPolicy: 'deferred' as const, cleanupFrequency: 25 }
+  conservative: { name: "conservative", maxLevels: 1, exhaustionPolicy: "immediate" as const, cleanupFrequency: 100 },
+  aggressive: { name: "aggressive", maxLevels: 5, exhaustionPolicy: "deferred" as const, cleanupFrequency: 50 },
+  deep: { name: "deep", maxLevels: 10, exhaustionPolicy: "deferred" as const, cleanupFrequency: 25 },
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -117,7 +117,7 @@ type Decision<Coords> = {
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export class WFC<Coords = any> extends EventEmitter {
+export class WFC<Coords = any> extends Emitter<WFCEvents<Coords>> {
   private readonly tileDefs: TileDef[];
   private readonly options: WFCOptions;
   private readonly maxBacktracks: number;
@@ -169,7 +169,7 @@ export class WFC<Coords = any> extends EventEmitter {
     if (!tileDefs || tileDefs.length === 0) {
       throw new Error("No tile definitions provided");
     }
-    
+
     // Check for duplicate tile names
     const tileNames = new Set<string>();
     for (const tileDef of tileDefs) {
@@ -177,7 +177,7 @@ export class WFC<Coords = any> extends EventEmitter {
         throw new Error(`Duplicate tile name: ${tileDef.name}`);
       }
       tileNames.add(tileDef.name);
-      
+
       if (!tileDef.adjacencies || tileDef.adjacencies.length === 0) {
         throw new Error(`Tile ${tileDef.name} has no adjacencies defined`);
       }
@@ -249,16 +249,6 @@ export class WFC<Coords = any> extends EventEmitter {
     return true;
   }
 
-  // EventEmitter's on/once, narrowed to this engine's events so that listeners
-  // are type-checked (WFCEvents lists them).
-  on<E extends keyof WFCEvents<Coords>>(event: E, listener: WFCEvents<Coords>[E]): this {
-    return super.on(event, listener);
-  }
-
-  once<E extends keyof WFCEvents<Coords>>(event: E, listener: WFCEvents<Coords>[E]): this {
-    return super.once(event, listener);
-  }
-
   start(initialSeed?: CellCollapse<Coords>[]): void {
     const generator = this.execute(initialSeed);
     let result = generator.next();
@@ -267,7 +257,10 @@ export class WFC<Coords = any> extends EventEmitter {
     }
   }
 
-  *execute(initialSeed?: CellCollapse<Coords>[], emitEvents: boolean = true): Generator<StepResult<Coords>, void, unknown> {
+  *execute(
+    initialSeed?: CellCollapse<Coords>[],
+    emitEvents: boolean = true,
+  ): Generator<StepResult<Coords>, void, unknown> {
     this.log(LogLevel.INFO, "Starting WFC execution");
 
     // Loading also removes tiles that have no compatible tile in some
@@ -367,8 +360,9 @@ export class WFC<Coords = any> extends EventEmitter {
         }
       }
     } catch (error) {
-      this.log(LogLevel.ERROR, `WFC execution failed: ${error instanceof Error ? error.message : error}`);
-      if (emitEvents) this.emit("error", error);
+      const failure = error instanceof Error ? error : new Error(String(error));
+      this.log(LogLevel.ERROR, `WFC execution failed: ${failure.message}`);
+      if (emitEvents) this.emit("error", failure);
       throw error;
     }
 

@@ -20,35 +20,36 @@ export type TileDef = {
    * Unique name for this tile
    */
   name: string;
-  
+
   /**
    * List of adjacency definitions.
    * The adjacencies are ordered: top, right, bottom, left
    * Can be provided as strings (will be parsed) or as Rule objects
    */
   adjacencies: AdjacencyDefinition;
-  
+
   /**
    * Rotation in degrees (0, 90, 180, 270)
    */
   rotation?: number;
-  
+
   /**
    * Whether the tile is reflected/flipped
    */
   reflection?: boolean;
-  
+
   /**
    * Weight for random selection (higher values = more likely to be selected)
    */
   weight?: number;
-  
+
   /**
    * Optional function to draw the tile on a canvas context. The engine never
    * calls it; it is there for your renderer's convenience.
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the context type depends on your renderer
   draw?: (ctx: any, x: number, y: number, w: number, h: number) => void;
-  
+
   /**
    * Optional unique identifier
    */
@@ -72,10 +73,11 @@ export class TileDefFactory {
   static defineTile(
     name: string,
     adjacencies: AdjacencyDefinition,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the context type depends on your renderer
     draw: (ctx: any, x: number, y: number, w: number, h: number) => void = () => {},
     weight: number = 1,
     rotation: number = 0,
-    reflection: boolean = false
+    reflection: boolean = false,
   ): TileDef {
     return {
       name,
@@ -93,18 +95,19 @@ export class TileDefFactory {
    * @returns A new TileDef with all adjacencies as Rule objects
    */
   static ensureParsedRules(tileDef: TileDef): TileDef {
-    const parsedAdjacencies = tileDef.adjacencies.map((adj, i) => {
-      if (typeof adj === 'string') {
-        return parseAdjacencyRule(adj);
-      } else {
-        return adj;
-      }
-    }).filter((adj): adj is Rule => adj !== null);
+    const parsedAdjacencies = tileDef.adjacencies
+      .map((adj) => {
+        if (typeof adj === "string") {
+          return parseAdjacencyRule(adj);
+        } else {
+          return adj;
+        }
+      })
+      .filter((adj): adj is Rule => adj !== null);
 
     return {
       ...tileDef,
-      adjacencies: parsedAdjacencies
+      adjacencies: parsedAdjacencies,
     };
   }
-
 }

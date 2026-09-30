@@ -1,4 +1,13 @@
-import { Rule, parseAdjacencyRule, RuleType, SimpleRule, NegatedRule, DirectionalRule, CompoundRule, ChoiceRule } from "./AdjacencyGrammar.js";
+import {
+  Rule,
+  parseAdjacencyRule,
+  RuleType,
+  SimpleRule,
+  NegatedRule,
+  DirectionalRule,
+  CompoundRule,
+  ChoiceRule,
+} from "./AdjacencyGrammar.js";
 
 /**
  * Type guard functions for each rule type
@@ -34,7 +43,7 @@ export function matchRules(ruleA: Rule, ruleB: Rule): boolean {
   if (isSimpleRule(ruleA) && isSimpleRule(ruleB)) {
     return (ruleA as SimpleRule).value === (ruleB as SimpleRule).value;
   }
-  
+
   // Negated rules match if the contained rules don't match
   if (isNegatedRule(ruleA)) {
     return !matchRules((ruleA as NegatedRule).value, ruleB);
@@ -42,16 +51,18 @@ export function matchRules(ruleA: Rule, ruleB: Rule): boolean {
   if (isNegatedRule(ruleB)) {
     return !matchRules(ruleA, (ruleB as NegatedRule).value);
   }
-  
+
   // Directional rules match if origin from one matches destination from other and vice versa
   if (isDirectionalRule(ruleA) && isDirectionalRule(ruleB)) {
     // Cast to directional rules
     const directionalA = ruleA as DirectionalRule;
     const directionalB = ruleB as DirectionalRule;
-    return matchRules(directionalA.origin, directionalB.destination) && 
-           matchRules(directionalA.destination, directionalB.origin);
+    return (
+      matchRules(directionalA.origin, directionalB.destination) &&
+      matchRules(directionalA.destination, directionalB.origin)
+    );
   }
-  
+
   // Compound rules match if they have the same number of elements and each matches in order
   if (isCompoundRule(ruleA) && isCompoundRule(ruleB)) {
     // Cast to compound rules
@@ -60,20 +71,18 @@ export function matchRules(ruleA: Rule, ruleB: Rule): boolean {
     if (compoundA.values.length !== compoundB.values.length) {
       return false;
     }
-    
-    return compoundA.values.every((valueA, index) => 
-      matchRules(valueA, compoundB.values[index])
-    );
+
+    return compoundA.values.every((valueA, index) => matchRules(valueA, compoundB.values[index]));
   }
-  
+
   // Choice rules match if any of their values match
   if (isChoiceRule(ruleA)) {
-    return (ruleA as ChoiceRule).values.some(valueA => matchRules(valueA, ruleB));
+    return (ruleA as ChoiceRule).values.some((valueA) => matchRules(valueA, ruleB));
   }
   if (isChoiceRule(ruleB)) {
-    return (ruleB as ChoiceRule).values.some(valueB => matchRules(ruleA, valueB));
+    return (ruleB as ChoiceRule).values.some((valueB) => matchRules(ruleA, valueB));
   }
-  
+
   // If types don't match, they don't match
   return false;
 }
@@ -81,7 +90,7 @@ export function matchRules(ruleA: Rule, ruleB: Rule): boolean {
 /**
  * Matches two adjacency rules to see if they are compatible
  * Using the new grammar-based approach
- * 
+ *
  * @param a First adjacency rule as a Rule object
  * @param b Second adjacency rule as a Rule object
  * @returns Boolean indicating if the adjacencies match
@@ -99,7 +108,7 @@ export function matchAdjacencies(a: Rule, b: Rule): boolean {
 /**
  * Matches two adjacency rules expressed as strings
  * This is a helper function that parses the strings and then uses matchAdjacencies
- * 
+ *
  * @param a First adjacency rule as a string
  * @param b Second adjacency rule as a string
  * @returns Boolean indicating if the adjacencies match
@@ -112,13 +121,13 @@ export function matchAdjacencyStrings(a: string, b: string): boolean {
       console.error(`Error parsing adjacency rule "${a}": ${ruleA.message}`);
       return false;
     }
-    
+
     const ruleB = parseAdjacencyRule(b);
     if (ruleB instanceof Error) {
       console.error(`Error parsing adjacency rule "${b}": ${ruleB.message}`);
       return false;
     }
-    
+
     // Use the Rule object matching function
     return matchAdjacencies(ruleA, ruleB);
   } catch (e) {

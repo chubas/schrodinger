@@ -26,11 +26,7 @@ export class AdjacencyTables {
   private readonly bits: Uint32Array[][] = [];
   private readonly wordsPerRow: number;
 
-  constructor(
-    tileDefs: TileDef[],
-    adjacencyMaps: Record<string, number[]>,
-    precomputed?: PrecomputedAdjacencies,
-  ) {
+  constructor(tileDefs: TileDef[], adjacencyMaps: Record<string, number[]>, precomputed?: PrecomputedAdjacencies) {
     const T = tileDefs.length;
     this.tileCount = T;
     this.wordsPerRow = Math.ceil(T / 32);
