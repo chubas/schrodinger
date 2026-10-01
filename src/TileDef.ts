@@ -29,16 +29,6 @@ export type TileDef = {
   adjacencies: AdjacencyDefinition;
 
   /**
-   * Rotation in degrees (0, 90, 180, 270)
-   */
-  rotation?: number;
-
-  /**
-   * Whether the tile is reflected/flipped
-   */
-  reflection?: boolean;
-
-  /**
    * Weight for random selection (higher values = more likely to be selected)
    */
   weight?: number;
@@ -66,8 +56,6 @@ export class TileDefFactory {
    * @param adjacencies - Adjacency rules as strings or Rule objects
    * @param draw - Draw function
    * @param weight - Optional weight
-   * @param rotation - Optional rotation
-   * @param reflection - Optional reflection
    * @returns Complete TileDef object
    */
   static defineTile(
@@ -76,16 +64,12 @@ export class TileDefFactory {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the context type depends on your renderer
     draw: (ctx: any, x: number, y: number, w: number, h: number) => void = () => {},
     weight: number = 1,
-    rotation: number = 0,
-    reflection: boolean = false,
   ): TileDef {
     return {
       name,
       adjacencies,
       draw,
       weight,
-      rotation,
-      reflection,
     };
   }
 

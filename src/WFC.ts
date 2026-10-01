@@ -29,10 +29,8 @@ export type WFCOptions = {
   // Mostly short attempts, with ever longer ones now and then, so the search
   // stays complete (a long enough attempt can prove there is no solution).
   // Default 25. 0 disables restarts, which makes proving "no solution" on
-  // hard instances several times faster.
+  // hard instances much faster.
   restartAfter?: number;
-  /** @deprecated Ignored; backtracking is a depth-first search limited by maxRetries. */
-  backtrackStep?: number;
   // The random source. Defaults to DefaultRandom (Math.random, or a
   // deterministic generator once seeded).
   random?: RandomLib;
@@ -40,8 +38,6 @@ export type WFCOptions = {
   // options and seed always give the same result.
   seed?: string | number;
   logLevel?: LogLevel;
-  /** @deprecated Ignored; backtracking is a depth-first search limited by maxRetries. */
-  backtrackStrategy?: BacktrackStrategy;
   // Recompute propagation state from scratch after every propagation and
   // restore, throwing on any mismatch with the incremental state. Slow;
   // meant for tests and stress testing.
@@ -67,21 +63,6 @@ export type WFCEvents<Coords = any> = {
   restart: (info: { restarts: number; backtracks: number }) => void;
   complete: () => void;
   error: (error: Error) => void;
-};
-
-/** @deprecated Ignored; backtracking is a depth-first search limited by WFCOptions.maxRetries. */
-export interface BacktrackStrategy {
-  name: string;
-  maxLevels: number;
-  exhaustionPolicy: "immediate" | "deferred";
-  cleanupFrequency: number;
-}
-
-/** @deprecated Ignored; backtracking is a depth-first search limited by WFCOptions.maxRetries. */
-export const BACKTRACK_STRATEGIES = {
-  conservative: { name: "conservative", maxLevels: 1, exhaustionPolicy: "immediate" as const, cleanupFrequency: 100 },
-  aggressive: { name: "aggressive", maxLevels: 5, exhaustionPolicy: "deferred" as const, cleanupFrequency: 50 },
-  deep: { name: "deep", maxLevels: 10, exhaustionPolicy: "deferred" as const, cleanupFrequency: 25 },
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -122,11 +103,6 @@ export class WFC<Coords = any> extends Emitter<WFCEvents<Coords>> {
   private readonly options: WFCOptions;
   private readonly maxBacktracks: number;
   private readonly restartAfter: number;
-  // Plain TS `private` rather than a native `#` field: at this project's
-  // ES2020 build target, TypeScript downlevels `#field` into a WeakMap-backed
-  // polyfill, and this field is read many times per adjacency check (the
-  // hottest path in the engine) - profiling showed that indirection alone
-  // accounting for ~38% of total runtime.
   private grid: Grid<Coords>;
   private readonly rng: RandomLib;
   private readonly logLevel: LogLevel;

@@ -19,6 +19,6 @@ First public version.
 - Supported environments: Node 18 or later (the built package also runs on Node 16), TypeScript 4.5 or later, and current browsers. CI tests Node 18, 20, 22 and 24 and TypeScript 4.5 to 5.9.
 - Packaging: ESM and CommonJS builds with types, and self-contained browser builds (`dist/index.global.js`, `dist/index.global.min.js`) exposing a `Schrodinger` global, for script tags and CDNs.
 
-### Known gaps
+### Limitations
 
-See [TODO.md](TODO.md): rotations and reflections are generated in your own code (examples show how), there is no boundary wrapping, and very large grids with tightly constrained tilesets can be slow.
+Rotations and reflections are generated in your own code (the examples show how), grids have hard edges (no wrapping), and very large grids with tightly constrained tilesets can take seconds. See the README.

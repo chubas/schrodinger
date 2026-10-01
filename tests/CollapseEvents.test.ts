@@ -115,9 +115,7 @@ describe("WFC Collapse Events", () => {
             expect(group.cells).toHaveLength(2);
             expect(group.cause).toBe("initial");
           } else {
-            // With the new implementation, collapse events might contain multiple cells
-            // and the cause might be initial or entropy
-            // Just verify that we're getting collapse events
+            // Later collapse events only need to be reported; their contents are checked below.
           }
 
           // Track collapsed cells

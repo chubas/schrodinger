@@ -38,7 +38,7 @@ The engine is verified more strictly than ordinary code, because a change that l
 2. Make your change.
 3. `npm run stress-test:compare` re-runs the same seeds and reports any seed whose run differs.
 
-A pure refactor or optimization should report **no** differences. A deliberate behavior change (a new search strategy, say) will report some; explain in the pull request which seeds changed and why that is expected, and re-record the baselines. `docs/propagation-support-counting-spec.md` shows what this looked like for past changes.
+A pure refactor or optimization should report **no** differences. A deliberate behavior change (a new search strategy, say) will report some; explain in the pull request which seeds changed and why that is expected, and re-record the baselines. `docs/how-it-works.md` describes what the stress test checks.
 
 The stress test also validates every solution independently of the engine, and `--check-invariants` recomputes the propagation state from scratch after every step. CI runs smaller versions of both.
 

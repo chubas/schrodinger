@@ -19,9 +19,7 @@ describe('TilesetImporter Integration Tests', () => {
       expect(tiles[1].name).toBe('water');
       expect(tiles[1].weight).toBe(2);
       expect(tiles[2].name).toBe('shore');
-      expect(tiles[2].rotation).toBe(90);
       expect(tiles[3].name).toBe('shore-corner');
-      expect(tiles[3].reflection).toBe(1);
 
       // Verify adjacencies were parsed correctly
       expect(tiles[0].adjacencies).toHaveLength(4);

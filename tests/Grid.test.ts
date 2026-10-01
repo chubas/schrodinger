@@ -27,7 +27,6 @@ describe("SquareGrid", () => {
     const newCell: Cell = {
       choices: [],
       collapsed: true,
-      forbidden: [],
       coords: [1, 1],
     };
     grid.set([1, 1], newCell);
@@ -87,7 +86,7 @@ describe("SquareGrid", () => {
   });
 
   test("adjacencyMap should map directions correctly", () => {
-    expect(grid.adjacencyMap).toEqual([2, 3, 0, 1]); // Bottom, Left, Top, Right
+    expect(grid.getAdjacencyMap([0, 0])).toEqual([2, 3, 0, 1]); // Bottom, Left, Top, Right
   });
 
   describe("getNeighbors", () => {

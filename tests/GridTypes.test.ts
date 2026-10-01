@@ -26,10 +26,10 @@ describe('Grid Types', () => {
       expect(neighbors.length).toBe(4);
       
       // Set values to check neighbor order
-      grid.set([1, 0], { choices: [], collapsed: true, forbidden: [], coords: [1, 0] }); // top
-      grid.set([2, 1], { choices: [], collapsed: true, forbidden: [], coords: [2, 1] }); // right
-      grid.set([1, 2], { choices: [], collapsed: true, forbidden: [], coords: [1, 2] }); // bottom
-      grid.set([0, 1], { choices: [], collapsed: true, forbidden: [], coords: [0, 1] }); // left
+      grid.set([1, 0], { choices: [], collapsed: true, coords: [1, 0] }); // top
+      grid.set([2, 1], { choices: [], collapsed: true, coords: [2, 1] }); // right
+      grid.set([1, 2], { choices: [], collapsed: true, coords: [1, 2] }); // bottom
+      grid.set([0, 1], { choices: [], collapsed: true, coords: [0, 1] }); // left
       
       const newNeighbors = grid.getNeighbors([1, 1]);
       expect(newNeighbors[0]?.coords).toEqual([1, 0]); // top
@@ -110,12 +110,12 @@ describe('Grid Types', () => {
       expect(neighbors.length).toBe(6);
       
       // Set values to check neighbor order
-      grid.set([1, 0], { choices: [], collapsed: true, forbidden: [], coords: [1, 0] }); // north
-      grid.set([2, 0], { choices: [], collapsed: true, forbidden: [], coords: [2, 0] }); // northeast
-      grid.set([2, 1], { choices: [], collapsed: true, forbidden: [], coords: [2, 1] }); // southeast
-      grid.set([1, 2], { choices: [], collapsed: true, forbidden: [], coords: [1, 2] }); // south
-      grid.set([0, 2], { choices: [], collapsed: true, forbidden: [], coords: [0, 2] }); // southwest
-      grid.set([0, 1], { choices: [], collapsed: true, forbidden: [], coords: [0, 1] }); // northwest
+      grid.set([1, 0], { choices: [], collapsed: true, coords: [1, 0] }); // north
+      grid.set([2, 0], { choices: [], collapsed: true, coords: [2, 0] }); // northeast
+      grid.set([2, 1], { choices: [], collapsed: true, coords: [2, 1] }); // southeast
+      grid.set([1, 2], { choices: [], collapsed: true, coords: [1, 2] }); // south
+      grid.set([0, 2], { choices: [], collapsed: true, coords: [0, 2] }); // southwest
+      grid.set([0, 1], { choices: [], collapsed: true, coords: [0, 1] }); // northwest
       
       const newNeighbors = grid.getNeighbors([1, 1]);
       expect(newNeighbors[0]?.coords).toEqual([1, 0]); // north
@@ -152,12 +152,12 @@ describe('Grid Types', () => {
       expect(neighbors.length).toBe(6);
       
       // Set values to check neighbor order
-      grid.set([2, 1, 1], { choices: [], collapsed: true, forbidden: [], coords: [2, 1, 1] }); // +x (right)
-      grid.set([0, 1, 1], { choices: [], collapsed: true, forbidden: [], coords: [0, 1, 1] }); // -x (left)
-      grid.set([1, 2, 1], { choices: [], collapsed: true, forbidden: [], coords: [1, 2, 1] }); // +y (up)
-      grid.set([1, 0, 1], { choices: [], collapsed: true, forbidden: [], coords: [1, 0, 1] }); // -y (down)
-      grid.set([1, 1, 2], { choices: [], collapsed: true, forbidden: [], coords: [1, 1, 2] }); // +z (forward)
-      grid.set([1, 1, 0], { choices: [], collapsed: true, forbidden: [], coords: [1, 1, 0] }); // -z (backward)
+      grid.set([2, 1, 1], { choices: [], collapsed: true, coords: [2, 1, 1] }); // +x (right)
+      grid.set([0, 1, 1], { choices: [], collapsed: true, coords: [0, 1, 1] }); // -x (left)
+      grid.set([1, 2, 1], { choices: [], collapsed: true, coords: [1, 2, 1] }); // +y (up)
+      grid.set([1, 0, 1], { choices: [], collapsed: true, coords: [1, 0, 1] }); // -y (down)
+      grid.set([1, 1, 2], { choices: [], collapsed: true, coords: [1, 1, 2] }); // +z (forward)
+      grid.set([1, 1, 0], { choices: [], collapsed: true, coords: [1, 1, 0] }); // -z (backward)
       
       const newNeighbors = grid.getNeighbors([1, 1, 1]);
       expect(newNeighbors[0]?.coords).toEqual([2, 1, 1]); // +x (right)

@@ -167,9 +167,7 @@ async function runBenchmark(): Promise<boolean> {
           `Tile${t}`,
           adjacencies,
           () => {}, // Empty draw function
-          1, // weight
-          0, // rotation
-          false // reflection
+          1 // weight
         );
 
         tileDefs.push(tileDef);

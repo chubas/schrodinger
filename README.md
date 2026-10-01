@@ -11,8 +11,6 @@ You describe your tiles and which sides may touch; the engine fills a grid (or a
   ┌┘┌┘│┌┐┌──┘ ┌─┘ └┐   ┌─┐  ┌──┐┌┐││└┐│└
 ```
 
-> **Status: early (0.x).** The engine is well tested, but the API may still change, and the package isn't published to npm yet. See [TODO.md](TODO.md) for known gaps.
-
 ## Features
 
 - **Grid-agnostic.** The engine only needs each cell's neighbours and how two neighbours face each other. Square, hexagonal and 3D cube grids are built in; a [custom grid](docs/custom-grids.md) is a few dozen lines (there's a binary tree in the examples).
@@ -34,16 +32,16 @@ Works in Node 18 or later and in browsers, as ESM (`import { WFC } from 'schrodi
 
 The code is plain ES2020 with no dependency beyond a parser library, so it doesn't need a recent runtime: CI tests Node 18, 20, 22 and 24, and the built package also runs on Node 16. For TypeScript, 4.5 is the oldest version that can read the type declarations; `moduleResolution` `node16`/`nodenext` needs 4.7+ and `bundler` needs 5.0+, which are TypeScript's own requirements.
 
-**In a browser without a bundler**, use the self-contained build, which exposes a `Schrodinger` global:
+**In a browser without a bundler**, use the self-contained build in the package (`dist/index.global.js`, or `dist/index.global.min.js`), which exposes a `Schrodinger` global:
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/schrodinger-wfc/dist/index.global.min.js"></script>
+<script src="node_modules/schrodinger-wfc/dist/index.global.min.js"></script>
 <script>
   const { WFC, SquareGrid } = Schrodinger;
 </script>
 ```
 
-> The package isn't published yet, so the install command and CDN URL above won't work until it is. To try it now, clone this repository and run `npm install` (this also builds `dist/`), then import from `dist/index.js` or `npm link` it.
+While the version is 0.x, minor releases may include breaking changes; see the [changelog](CHANGELOG.md).
 
 ## Quick start
 
@@ -169,11 +167,9 @@ new WFC(tiles, grid, {
 });
 ```
 
-`backtrackStrategy` and `backtrackStep` from earlier versions are ignored.
-
 ## Restarts
 
-Backtracking always undoes the most recent choice first. That is the right thing when the last few choices caused the problem, but when the real mistake was made long ago, the engine can spend its whole budget re-trying recent choices that can't fix it. On large grids that used to mean many runs never finished.
+Backtracking always undoes the most recent choice first. That is the right thing when the last few choices caused the problem, but when the real mistake was made long ago, the engine can spend its whole budget re-trying recent choices that can't fix it. On large grids that would leave many runs unfinished.
 
 So when an attempt has needed too many backtracks, the engine throws it away and starts over: everything is undone except the initial cells you passed to `start()`, and the next attempt draws different random numbers from the same random source, so it makes different choices. The cutoff follows the Luby sequence, `restartAfter × (1, 1, 2, 1, 1, 2, 4, 1, 1, 2, …)` backtracks: mostly short attempts, with ever longer ones now and then, so the search stays complete and can still prove that no solution exists.
 
@@ -229,14 +225,14 @@ Results on a laptop with the 90-tile isometric tileset from the demos, using see
 
 Time grows roughly linearly with the number of cells until the grid gets large enough that attempts start failing and restarting (about 1.4 restarts per run at 40×60, about 19 at 80×80).
 
-Comparing tile rules and building the lookup tables (a few milliseconds for 90 tiles) happens once per `WFC` instance, when it first runs, and doesn't depend on the grid's size. If you create many instances of the same tileset, `AdjacencyPrecomputer` and `setPrecomputedAdjacencies` skip the rule comparisons. How the engine works and how it was measured is written up in [docs/propagation-support-counting-spec.md](docs/propagation-support-counting-spec.md).
+Comparing tile rules and building the lookup tables (a few milliseconds for 90 tiles) happens once per `WFC` instance, when it first runs, and doesn't depend on the grid's size. If you create many instances of the same tileset, `AdjacencyPrecomputer` and `setPrecomputedAdjacencies` skip the rule comparisons. How the engine works is explained in [docs/how-it-works.md](docs/how-it-works.md).
 
 ## Limitations
 
-- **Very large grids with tightly constrained tilesets are slow.** Restarts make them finish (80×80 above), but each restart repeats work, so they can take seconds. A search that learns why it failed (backjumping) would waste less; see [TODO.md](TODO.md).
+- **Very large grids with tightly constrained tilesets are slow.** Restarts make them finish (80×80 above), but each restart repeats work, so they can take seconds.
 - **Proving that no solution exists can take longer with restarts on**, because it needs one attempt long enough to exhaust the search. On colouring complete graphs with too few colours it took 6.6×, 11× and 15× the backtracks of plain search for proofs that need 719, 5,039 and 40,319 backtracks; proofs that need fewer than 25 are unaffected. Set `restartAfter: 0` if you mostly need that.
-- **Rotations and reflections are generated in your own code, by design** (see above), and there is no boundary wrapping yet (see [TODO.md](TODO.md)).
-- Everything else known is in [TODO.md](TODO.md).
+- **Rotations and reflections are generated in your own code, by design** (see [Rotations and reflections](#rotations-and-reflections)).
+- **Grids have hard edges**: there is no wrapping (torus) or mirrored boundary. A custom grid can wrap by returning the wrapped cell from `getNeighbors`.
 
 ## Development
 
@@ -259,7 +255,7 @@ tests/         jest tests
 stress-test/   seeded stress test, baselines and the compare script
 benchmark/     timing/memory benchmark
 examples/      Node scripts and browser demos
-docs/          grammar and custom grid guides, design notes
+docs/          rule grammar, custom grids, generator, how the engine works
 ```
 
 ## License

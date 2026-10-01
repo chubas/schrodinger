@@ -86,7 +86,7 @@ function checkGrid(grid) {
 }
 ```
 
-(`tests/GridConsistency.test.ts` runs this check on every built-in grid. It once found that an earlier `TriangularGrid` was wrong: most of its neighbour pairs didn't face back.)
+(`tests/GridConsistency.test.ts` runs this check on every built-in grid.)
 
 ## Tiles for your grid
 

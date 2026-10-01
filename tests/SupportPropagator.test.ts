@@ -62,7 +62,7 @@ class DirectedLineGrid implements Grid<[number]> {
   private cells: Cell<[number]>[];
 
   constructor(length: number) {
-    this.cells = Array.from({ length }, (_, i) => ({ choices: [], collapsed: false, forbidden: [], coords: [i] }));
+    this.cells = Array.from({ length }, (_, i) => ({ choices: [], collapsed: false, coords: [i] }));
   }
   *iterate(): IterableIterator<[Cell<[number]>, [number]]> {
     for (const cell of this.cells) yield [cell, cell.coords];

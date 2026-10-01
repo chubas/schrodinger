@@ -11,13 +11,11 @@
     },
     {
       "name": "shore",
-      "adjacencies": ["grass", "water", "grass", "water"],
-      "rotation": 90
+      "adjacencies": ["grass", "water", "grass", "water"]
     },
     {
       "name": "shore-corner",
-      "adjacencies": ["grass", "water", "water", "grass"],
-      "reflection": 1
+      "adjacencies": ["grass", "water", "water", "grass"]
     }
   ]
 }

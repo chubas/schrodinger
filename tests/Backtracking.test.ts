@@ -55,7 +55,7 @@ class CompleteGraphGrid implements Grid<[number]> {
   private cells: Cell<[number]>[];
 
   constructor(private nodes: number) {
-    this.cells = Array.from({ length: nodes }, (_, i) => ({ choices: [], collapsed: false, forbidden: [], coords: [i] as [number] }));
+    this.cells = Array.from({ length: nodes }, (_, i) => ({ choices: [], collapsed: false, coords: [i] as [number] }));
     for (let i = 0; i < nodes; i++) {
       // Direction d of node i is node j (skipping i); from j, node i is direction i if i < j, else i - 1.
       this.adjacencyMaps[`n${i}`] = Array.from({ length: nodes - 1 }, (_, d) => {
@@ -109,7 +109,7 @@ const colourTiles = (colours: number): TileDef[] =>
 // Three mutually adjacent cells.
 class TriangleCycleGrid implements Grid<[number]> {
   adjacencyMaps = { cycle: [1, 0] };
-  private cells: Cell<[number]>[] = [0, 1, 2].map((i) => ({ choices: [], collapsed: false, forbidden: [], coords: [i] }));
+  private cells: Cell<[number]>[] = [0, 1, 2].map((i) => ({ choices: [], collapsed: false, coords: [i] }));
 
   *iterate(): IterableIterator<[Cell<[number]>, [number]]> {
     for (const cell of this.cells) yield [cell, cell.coords];

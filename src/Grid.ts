@@ -4,8 +4,6 @@ import { TileDef } from "./TileDef.js";
 export type Cell<Coords = any> = {
   choices: TileDef[];
   collapsed: boolean;
-  /** @deprecated Unused by the engine; grids no longer need to provide it. */
-  forbidden?: TileDef[];
   coords: Coords;
   value?: TileDef; // The selected tile when collapsed
 };
@@ -135,20 +133,13 @@ export class SquareGrid implements Grid<[number, number]> {
     return this.cells;
   }
 
-  // New method to get adjacency type for coordinates
   getAdjacencyType(_coords: [number, number]): string {
     // Square grid has only one type
     return "square";
   }
 
-  // New method to get adjacency map for coordinates
   getAdjacencyMap(coords: [number, number]): number[] {
     return this.adjacencyMaps[this.getAdjacencyType(coords)];
-  }
-
-  // Keeping the adjacencyMap property for backward compatibility
-  get adjacencyMap(): number[] {
-    return this.adjacencyMaps["square"];
   }
 }
 

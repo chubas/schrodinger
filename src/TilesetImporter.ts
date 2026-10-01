@@ -10,8 +10,6 @@ export interface TilesetDefinition {
     name: string;
     adjacencies: AdjacencyDefinition;
     weight?: number;
-    rotation?: number;
-    reflection?: boolean;
     draw?: () => void;
   }[];
 }
@@ -41,14 +39,7 @@ export class TilesetImporter {
           throw new Error("Tile definition must have a name");
         }
 
-        return TileDefFactory.defineTile(
-          tileDef.name,
-          tileDef.adjacencies,
-          tileDef.draw ?? (() => {}),
-          tileDef.weight,
-          tileDef.rotation,
-          tileDef.reflection,
-        );
+        return TileDefFactory.defineTile(tileDef.name, tileDef.adjacencies, tileDef.draw ?? (() => {}), tileDef.weight);
       });
     } catch (e) {
       throw new Error(`Failed to load tileset from ${fullPath}: ${e}`);

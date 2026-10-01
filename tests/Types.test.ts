@@ -12,7 +12,7 @@ describe("Public types", () => {
     expect(tile.draw).toBeUndefined();
   });
 
-  it("a Grid only needs the five members the engine uses, and cells need no `forbidden`", () => {
+  it("a Grid only needs the five members the engine uses", () => {
     class Pair implements Grid<number> {
       adjacencyMaps = { pair: [0] };
       private cells: Cell<number>[] = [0, 1].map((coords) => ({ coords, choices: [], collapsed: false }));
