@@ -1,0 +1,97 @@
+import { Rule, parseAdjacencyRule } from "./AdjacencyGrammar.js";
+
+/**
+ * Represents an adjacency definition which can be either a string or a Rule object
+ * Allows for flexible definition of adjacencies in both TypeScript and JavaScript
+ */
+export type AdjacencyValue = string | Rule;
+
+/**
+ * Represents the adjacencies for a tile
+ * This can be an array of either strings or Rule objects (but all elements must be of the same type)
+ */
+export type AdjacencyDefinition = AdjacencyValue[];
+
+/**
+ * Tile definition with properties and adjacencies
+ */
+export type TileDef = {
+  /**
+   * Unique name for this tile
+   */
+  name: string;
+
+  /**
+   * List of adjacency definitions.
+   * The adjacencies are ordered: top, right, bottom, left
+   * Can be provided as strings (will be parsed) or as Rule objects
+   */
+  adjacencies: AdjacencyDefinition;
+
+  /**
+   * Weight for random selection (higher values = more likely to be selected)
+   */
+  weight?: number;
+
+  /**
+   * Optional function to draw the tile on a canvas context. The engine never
+   * calls it; it is there for your renderer's convenience.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the context type depends on your renderer
+  draw?: (ctx: any, x: number, y: number, w: number, h: number) => void;
+
+  /**
+   * Optional unique identifier
+   */
+  id?: string;
+};
+
+/**
+ * Utility functions for working with tile definitions
+ */
+export class TileDefFactory {
+  /**
+   * Creates a TileDef with the provided properties
+   * @param name - Tile name
+   * @param adjacencies - Adjacency rules as strings or Rule objects
+   * @param draw - Draw function
+   * @param weight - Optional weight
+   * @returns Complete TileDef object
+   */
+  static defineTile(
+    name: string,
+    adjacencies: AdjacencyDefinition,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the context type depends on your renderer
+    draw: (ctx: any, x: number, y: number, w: number, h: number) => void = () => {},
+    weight: number = 1,
+  ): TileDef {
+    return {
+      name,
+      adjacencies,
+      draw,
+      weight,
+    };
+  }
+
+  /**
+   * Ensures that all adjacency rules in a TileDef are Rule objects
+   * @param tileDef The tile definition to process
+   * @returns A new TileDef with all adjacencies as Rule objects
+   */
+  static ensureParsedRules(tileDef: TileDef): TileDef {
+    const parsedAdjacencies = tileDef.adjacencies
+      .map((adj) => {
+        if (typeof adj === "string") {
+          return parseAdjacencyRule(adj);
+        } else {
+          return adj;
+        }
+      })
+      .filter((adj): adj is Rule => adj !== null);
+
+    return {
+      ...tileDef,
+      adjacencies: parsedAdjacencies,
+    };
+  }
+}

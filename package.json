@@ -1,0 +1,117 @@
+{
+  "name": "schrodinger-wfc",
+  "version": "0.1.0",
+  "description": "Wave Function Collapse engine for any grid or graph: square, hexagonal, 3D or your own. Rich adjacency rules, backtracking with restarts, seedable, step-by-step.",
+  "keywords": [
+    "wave-function-collapse",
+    "wfc",
+    "procedural-generation",
+    "procgen",
+    "tiling",
+    "constraint-solver",
+    "grid",
+    "hexagonal",
+    "graph",
+    "generative"
+  ],
+  "homepage": "https://github.com/chubas/schrodinger#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chubas/schrodinger.git"
+  },
+  "bugs": {
+    "url": "https://github.com/chubas/schrodinger/issues"
+  },
+  "author": "Rubén Medellín <ruben.medellin.c@gmail.com>",
+  "license": "LGPL-2.1-only",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "unpkg": "./dist/index.global.min.js",
+  "jsdelivr": "./dist/index.global.min.js",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./node": {
+      "import": {
+        "types": "./dist/node.d.ts",
+        "default": "./dist/node.js"
+      },
+      "require": {
+        "types": "./dist/node.d.cts",
+        "default": "./dist/node.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "node": [
+        "./dist/node.d.ts"
+      ]
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "THIRD-PARTY-LICENSES.md",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
+    "build": "npm run clean && tsup",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "lint": "eslint \"src/**/*.ts\" --max-warnings=0",
+    "lint:fix": "eslint \"src/**/*.ts\" --fix",
+    "test": "jest",
+    "build:benchmark": "tsc -p benchmark/tsconfig.json",
+    "benchmark": "npm run build:benchmark && node dist-benchmark/benchmark/benchmark.js",
+    "benchmark:basic": "npm run benchmark -- --width 5 --height 5 --tiles 3 --repeat 1",
+    "benchmark:standard": "npm run benchmark -- --width 20 --height 20 --tiles 8 --repeat 3",
+    "benchmark:compare": "node benchmark/compare.js",
+    "build:stress-test": "tsc -p stress-test/tsconfig.json",
+    "stress-test": "npm run build:stress-test && node dist-stress-test/stress-test/stress-test.js",
+    "stress-test:record": "npm run build:stress-test && bash stress-test/suite.sh record",
+    "stress-test:compare": "npm run build:stress-test && bash stress-test/suite.sh compare",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm test",
+    "check:package": "node scripts/check-package.mjs",
+    "check:runtime": "node scripts/runtime-check.mjs"
+  },
+  "dependencies": {
+    "parsimmon": "^1.18.1"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.2.0",
+    "@eslint/js": "^9.16.0",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.10.1",
+    "@types/parsimmon": "^1.10.9",
+    "@types/seedrandom": "^3.0.8",
+    "@typescript-eslint/eslint-plugin": "^8.16.0",
+    "@typescript-eslint/parser": "^8.16.0",
+    "eslint": "^9.16.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.2.1",
+    "jest": "^29.7.0",
+    "prettier": "^3.4.1",
+    "seedrandom": "^3.0.5",
+    "ts-jest": "^29.2.5",
+    "ts-node": "^10.9.2",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2"
+  }
+}

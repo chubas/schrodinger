@@ -1,0 +1,91 @@
+# WFC Algorithm Benchmarking
+
+This directory contains utilities for benchmarking the Wave Function Collapse (WFC) algorithm implementation. The tools allow you to measure performance metrics and track improvements or regressions as you make changes to the algorithm.
+
+## Benchmark Utilities
+
+- `benchmark.ts`: Core benchmarking script; runs the real engine on a synthetic tileset in which every tile matches every other, so it measures raw engine overhead rather than constraint solving. For realistic workloads and correctness checks use `stress-test/` (see the main README).
+- `compare.js`: Tool for comparing benchmark results over time
+
+## Metrics Tracked
+
+The benchmarking tools track several key metrics:
+
+- **Execution Time**: How long the algorithm takes to run
+- **Algorithm Operations**:
+  - Number of cell collapses
+  - Number of backtracking operations
+- **Memory**: heap and RSS usage
+- **Success Rate**: Percentage of runs that complete successfully
+
+## Running Benchmarks
+
+You can run benchmarks using the npm scripts:
+
+```bash
+# Run with default settings (20x20 grid, 8 tile types, 3 repetitions)
+npm run benchmark:standard
+
+# Run with custom settings
+npm run benchmark -- --width 30 --height 30 --tiles 10 --repeat 5
+
+# Run a small benchmark (5x5 grid, 3 tile types, 1 repetition)
+npm run benchmark:basic
+```
+
+### Command Line Options
+
+- `--width <number>`: Grid width (default: 20)
+- `--height <number>`: Grid height (default: 20)
+- `--tiles <number>`: Number of tile types (default: 8)
+- `--repeat <number>`: Number of benchmark iterations (default: 3)
+- `--output <file>`: Output file for results (default: benchmark-results.json)
+- `--verbose`: Enable verbose logging
+- `--help`: Show help
+
+## Comparing Results
+
+You can compare benchmark results to analyze performance trends:
+
+```bash
+# Compare all benchmark runs in the results file
+npm run benchmark:compare
+
+# Limit the number of runs shown for each configuration
+npm run benchmark:compare -- --limit 5
+```
+
+The comparison tool displays:
+
+1. A table of benchmark runs for each configuration
+2. Trend analysis showing changes in key metrics
+3. Warnings for significant performance degradations
+
+## Example Workflow
+
+1. Run baseline benchmarks:
+   ```bash
+   npm run benchmark:standard
+   ```
+
+2. Make optimizations to the WFC implementation
+
+3. Run the benchmarks again with the same settings:
+   ```bash
+   npm run benchmark:standard
+   ```
+
+4. Compare the results:
+   ```bash
+   npm run benchmark:compare
+   ```
+
+5. Review the metrics to see if your changes improved performance
+
+## Tips for Effective Benchmarking
+
+- Run benchmarks multiple times and average the results
+- Use the same configuration for before/after comparisons
+- Consider varying grid sizes and tile counts to test different scenarios
+- Save benchmark results before and after major changes
+- Look for patterns in the metrics that might indicate bottlenecks 
