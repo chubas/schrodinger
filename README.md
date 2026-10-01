@@ -32,14 +32,16 @@ Works in Node 18 or later and in browsers, as ESM (`import { WFC } from 'schrodi
 
 The code is plain ES2020 with no dependency beyond a parser library, so it doesn't need a recent runtime: CI tests Node 18, 20, 22 and 24, and the built package also runs on Node 16. For TypeScript, 4.5 is the oldest version that can read the type declarations; `moduleResolution` `node16`/`nodenext` needs 4.7+ and `bundler` needs 5.0+, which are TypeScript's own requirements.
 
-**In a browser without a bundler**, use the self-contained build in the package (`dist/index.global.js`, or `dist/index.global.min.js`), which exposes a `Schrodinger` global:
+**In a browser without a bundler**, load the self-contained build from a CDN. It exposes a `Schrodinger` global:
 
 ```html
-<script src="node_modules/schrodinger-wfc/dist/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/schrodinger-wfc@0.1.0/dist/index.global.min.js"></script>
 <script>
   const { WFC, SquareGrid } = Schrodinger;
 </script>
 ```
+
+Pin the version, as above, so a later release can't change what your page loads. (`https://unpkg.com/schrodinger-wfc@0.1.0` works too.) The same files are in the package as `dist/index.global.js` and `dist/index.global.min.js`, so you can also serve them yourself.
 
 While the version is 0.x, minor releases may include breaking changes; see the [changelog](CHANGELOG.md).
 

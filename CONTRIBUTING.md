@@ -56,3 +56,15 @@ Runs are deterministic once seeded, so the most useful report is the smallest ti
 ## License
 
 The project is licensed under the [LGPL-2.1](LICENSE). By contributing you agree that your contributions are licensed under the same terms.
+
+## Releasing
+
+For maintainers:
+
+1. Make sure `main` is green in CI and `npm run check:package` passes locally.
+2. Move the entries under the changelog's top heading to a new version heading with today's date, and set `version` in `package.json` (`npm version <patch|minor|major> --no-git-tag-version`).
+3. Commit, then tag: `git tag v<version>` and `git push --tags`.
+4. `npm publish` (the `prepare` and `prepublishOnly` scripts build the package and run the tests first).
+5. Update the pinned version in the README's CDN snippet to the new release.
+
+The browser builds are served automatically by jsDelivr and unpkg from the published package.

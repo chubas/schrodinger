@@ -35,10 +35,6 @@ export class AdjacencyPrecomputer {
     // Get all adjacency types from the grid
     const adjacencyTypes = Object.keys(grid.adjacencyMaps);
 
-    console.log(
-      `Precomputing adjacencies for ${parsedTileDefs.length} tiles with ${adjacencyTypes.length} adjacency types`,
-    );
-
     // For each tile
     for (const tile1 of parsedTileDefs) {
       precomputed[tile1.name] = {};
